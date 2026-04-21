@@ -1,0 +1,48 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files (local workspace config is not tracked;
+# shared settings live in the parent all-repos.code-workspace file)
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Tauri / Rust build artifacts
+src-tauri/target/
+src-tauri/gen/schemas/
+# Android build output + local-only config (the rest of gen/android is tracked)
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/**/build/
+src-tauri/gen/android/local.properties
+src-tauri/gen/android/.idea/
+**/*.rs.bk
+
+# Env
+.env
+.env.local
+*.local
+
+# SQLite runtime DBs
+*.db
+*.sqlite
+*.sqlite3
+
+# CA cert runtime files (generated on first launch per user)
+blueflame-ca.crt
+blueflame-ca.key

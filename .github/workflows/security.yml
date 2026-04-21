@@ -1,0 +1,14 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    uses: w1ck3ds0d4/SecureCheck/.github/workflows/scan.yml@main
+    secrets: inherit

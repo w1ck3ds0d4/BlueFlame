@@ -1,0 +1,13 @@
+title = "BlueFlame Secret Scanning"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "BlueFlame allowlist"
+paths = [
+  '''node_modules''',
+  '''src-tauri/target''',
+  '''dist''',
+  '''build''',
+]

@@ -1,0 +1,136 @@
+[package]
+name = "blueflame"
+version = "0.1.0"
+description = "BlueFlame - privacy-first browser shell with embedded MITM filter proxy"
+authors = ["w1ck3ds0d4 <daniel.svs@outlook.com>"]
+edition = "2021"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/w1ck3ds0d4/BlueFlame"
+
+[lib]
+name = "blueflame_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["unstable", "webview-data-url"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# MITM proxy core
+hudsucker = "0.22"
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+hyper-rustls = { version = "0.27", features = ["http1", "webpki-roots"] }
+
+# SOCKS5 client for routing the MITM proxy's upstream through Tor.
+tokio-socks = "0.5"
+tower-service = "0.3"
+
+# Embedded Tor client (no external tor daemon needed). Gated behind a
+# Cargo feature because arti pulls in a large dependency tree; default
+# features include it so `pnpm tauri dev` / build ship it unchanged.
+arti-client = { version = "0.34", default-features = false, features = ["tokio", "rustls"], optional = true }
+tor-rtcompat = { version = "0.34", default-features = false, features = ["tokio", "rustls"], optional = true }
+
+# TLS and CA cert generation
+rcgen = "0.13"
+rustls = "0.23"
+rustls-pemfile = "2"
+# Parse upstream-server certificates for trust-score signals (issuer,
+# validity window, self-signed check). Only cert introspection; the
+# actual chain-verification is still done by webpki via rustls.
+x509-parser = "0.18"
+webpki-roots = "1"
+
+# Storage (history, bookmarks, settings)
+rusqlite = { version = "0.37", features = ["bundled"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Regex for filter matching
+regex = "1"
+
+# URL parsing
+url = "2"
+
+# HTML parsing for metasearch result extraction + body-level trust
+# signals (login form cross-origin, password-on-http, outdated JS
+# libraries).
+scraper = "0.23"
+
+# Stream helpers for collecting response bodies with a size cap before
+# running HTML analysis on them. Already transitive via hudsucker; we
+# depend on it directly so the `BodyExt::collect` call sites compile.
+http-body-util = "0.1"
+
+# HTTP client for fetching filter lists
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "deflate"] }
+
+# Parallel filter matching
+rayon = "1"
+
+[features]
+default = ["built-in-tor"]
+built-in-tor = ["dep:arti-client", "dep:tor-rtcompat"]
+
+# macOS 14+ WKWebView gets its per-webview proxy via Tauri's
+# macos-proxy feature (which pulls in wry's mac-proxy, using the
+# Network framework). Only enabled on macOS - on Windows/Linux the
+# feature would try to link macOS-only symbols.
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri = { version = "2", features = ["macos-proxy"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3"
+# Only used by examples/gen_icon.rs to render the source icon PNG.
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+# Dev profile tuned so the app is snappy to USE while iterating, not just
+# fast to compile once. The dev build spends most of its time running the
+# MITM proxy, regex filters, TLS handshakes, and the webview - all of
+# which are noticeably faster at opt-level=1.
+#
+# - debug = 1             line-table debug info only, enough for backtraces,
+#                         much faster to link than full debuginfo
+# - incremental = true    default for dev, made explicit so we don't lose it
+#                         if someone copies this profile later
+[profile.dev]
+debug = 1
+incremental = true
+
+# Compile dependencies at -O1 so the regex/TLS/HTTP stack isn't running
+# unoptimized. Our own crate stays at -O0 (the default) so recompiles of
+# blueflame itself are as fast as possible. Deps only rebuild when their
+# versions change, so the first build costs a little more and every
+# iteration after is faster.
+[profile.dev.package."*"]
+opt-level = 1
+
+# Aggressive size optimizations for the release binary.
+# - opt-level = "z"  minimize size over speed
+# - lto = "fat"      link-time optimization across all crates
+# - codegen-units=1  fewer codegen units allows better optimizer decisions
+# - strip = true     remove debug symbols from the final binary
+# - panic = abort    skip unwinding machinery; a panic kills the app anyway
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+debug = false
+incremental = false
