@@ -1615,6 +1615,49 @@ button {
   white-space: pre-wrap;
 }
 
+@media (max-width: 640px) {
+  .debug {
+    padding: 12px;
+  }
+
+  .debug-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .debug-scroll {
+    max-height: none;
+  }
+
+  .debug-row {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'ts level target'
+      'msg msg msg';
+    gap: 2px 8px;
+    padding: 6px 10px;
+  }
+
+  .debug-ts {
+    grid-area: ts;
+  }
+
+  .debug-level {
+    grid-area: level;
+  }
+
+  .debug-target {
+    grid-area: target;
+    font-size: 10px;
+  }
+
+  .debug-msg {
+    grid-area: msg;
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
 .card {
   padding: 12px 14px;
   background: var(--bg-elev);
