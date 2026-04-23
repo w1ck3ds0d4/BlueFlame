@@ -296,6 +296,24 @@ impl Store {
         }
     }
 
+    /// Insert a bookmark only if its url isn't already bookmarked.
+    /// Returns `true` if a row was inserted, `false` if the url already existed.
+    /// Used by import flows so re-importing doesn't overwrite existing
+    /// `created_at` timestamps or duplicate entries.
+    pub fn insert_bookmark_if_new(
+        &self,
+        url: &str,
+        title: &str,
+        created_at: i64,
+    ) -> anyhow::Result<bool> {
+        let inserted = self.conn.execute(
+            "insert into bookmarks (url, title, created_at) values (?1, ?2, ?3)
+             on conflict(url) do nothing",
+            params![url, title, created_at],
+        )?;
+        Ok(inserted > 0)
+    }
+
     pub fn is_bookmarked(&self, url: &str) -> anyhow::Result<bool> {
         Ok(self
             .conn

@@ -8,6 +8,7 @@ mod debug_log;
 mod embedded_tor;
 mod favicons;
 mod filter_parser;
+mod import_export;
 mod list_loader;
 mod metasearch;
 mod new_tab;
@@ -44,6 +45,7 @@ use commands::{
     personal_top_visited, refresh_filter_lists, refresh_reputation_feeds, reset_stats, reveal_ca,
     set_metasearch_enabled, set_mobile_ua, set_search_engine, set_tor_settings, url_suggest,
 };
+use import_export::{export_data, import_bookmarks_html, import_data};
 use proxy::ProxyState;
 use storage::{SharedStore, Store};
 
@@ -195,6 +197,9 @@ pub fn run() {
             get_trust_history,
             get_reputation_feeds,
             refresh_reputation_feeds,
+            export_data,
+            import_data,
+            import_bookmarks_html,
         ])
         .run(tauri::generate_context!())
         .expect("error while running BlueFlame");

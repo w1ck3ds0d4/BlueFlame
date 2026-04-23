@@ -329,6 +329,50 @@ impl SearchSettings {
         )?;
         Ok(())
     }
+
+    /// Dump every persisted setting as `(key, value)` pairs for export.
+    /// Includes every row in the settings table, so new keys added later
+    /// are picked up automatically.
+    pub fn dump_all(&self) -> anyhow::Result<Vec<(String, String)>> {
+        let c = self.conn()?;
+        let mut stmt = c.prepare("select k, v from settings order by k")?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Restore settings from an export. Only keys in the allowlist are
+    /// written, so a tampered backup can't inject arbitrary keys. Returns
+    /// the count of keys actually applied.
+    pub fn restore_all(&self, pairs: &[(String, String)]) -> anyhow::Result<usize> {
+        const ALLOWED: &[&str] = &[
+            "search_engine",
+            "metasearch",
+            "mobile_ua",
+            "desktop_window_width",
+            "desktop_window_height",
+            "tor_enabled",
+            "tor_proxy_addr",
+            "tor_builtin",
+        ];
+        let c = self.conn()?;
+        let mut applied = 0;
+        for (k, v) in pairs {
+            if !ALLOWED.contains(&k.as_str()) {
+                continue;
+            }
+            c.execute(
+                "insert into settings (k, v) values (?1, ?2)
+                 on conflict(k) do update set v = excluded.v",
+                params![k, v],
+            )?;
+            applied += 1;
+        }
+        Ok(applied)
+    }
 }
 
 /// Stock Tor daemon SOCKS5 port. Tor Browser uses 9150.

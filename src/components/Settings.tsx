@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { PersonalIndex } from './PersonalIndex';
 import { BRAILLE_FRAMES, useAsciiFrames } from '../ascii';
@@ -63,6 +63,9 @@ export function Settings() {
   const [lastRepRefresh, setLastRepRefresh] = useState<RefreshResult | null>(null);
   const [mobileUa, setMobileUa] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ioBusy, setIoBusy] = useState(false);
+  const [ioMessage, setIoMessage] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   async function loadAll() {
     // Each call populates its own slice of state. A failure in one (e.g.
@@ -172,6 +175,79 @@ export function Settings() {
       setError(String(e));
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function onExport() {
+    setIoBusy(true);
+    setIoMessage(null);
+    try {
+      const json = await invoke<string>('export_data');
+      const today = new Date().toISOString().slice(0, 10);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `blueflame-backup-${today}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setIoMessage('Backup downloaded.');
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setIoBusy(false);
+    }
+  }
+
+  async function onImport(file: File) {
+    setIoBusy(true);
+    setIoMessage(null);
+    try {
+      const text = await file.text();
+      const lower = file.name.toLowerCase();
+      const isHtml =
+        lower.endsWith('.html') ||
+        lower.endsWith('.htm') ||
+        text.slice(0, 400).toLowerCase().includes('netscape-bookmark-file');
+      const isJson = lower.endsWith('.json') || (!isHtml && text.trimStart().startsWith('{'));
+
+      if (isJson) {
+        const confirmed = window.confirm(
+          'Importing a BlueFlame backup will overwrite your current settings ' +
+            '(bookmarks will be merged, never overwritten). Continue?',
+        );
+        if (!confirmed) {
+          setIoBusy(false);
+          return;
+        }
+        const r = await invoke<{
+          settings_imported: number;
+          bookmarks_imported: number;
+          bookmarks_skipped: number;
+        }>('import_data', { json: text });
+        setIoMessage(
+          `Imported ${r.settings_imported} settings and ${r.bookmarks_imported} bookmark(s).` +
+            (r.bookmarks_skipped ? ` ${r.bookmarks_skipped} skipped (already present).` : ''),
+        );
+        await loadAll();
+      } else if (isHtml) {
+        const r = await invoke<{
+          bookmarks_imported: number;
+          bookmarks_skipped: number;
+        }>('import_bookmarks_html', { html: text });
+        setIoMessage(
+          `Imported ${r.bookmarks_imported} bookmark(s) from browser export.` +
+            (r.bookmarks_skipped ? ` ${r.bookmarks_skipped} skipped (already present).` : ''),
+        );
+      } else {
+        setError(`Unrecognized file type: ${file.name}. Use .json (BlueFlame backup) or .html (browser bookmark export).`);
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setIoBusy(false);
     }
   }
 
@@ -483,6 +559,42 @@ export function Settings() {
           Resetting zeroes total requests, blocked, and bytes saved. The proxy and filters keep
           running.
         </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <h3>backup &amp; import</h3>
+          <div className="panel-actions">
+            <button className="secondary" onClick={onExport} disabled={ioBusy}>
+              export backup
+            </button>
+            <button
+              className="secondary"
+              onClick={() => importInputRef.current?.click()}
+              disabled={ioBusy}
+            >
+              import file
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json,.html,.htm,application/json,text/html"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (f) onImport(f);
+              }}
+            />
+          </div>
+        </div>
+        <div className="panel-note">
+          Export downloads a JSON file with all settings and bookmarks so you can move to
+          another device. Import accepts that same JSON file, or a bookmarks export from
+          Chrome, Edge, Firefox, or Safari (File &rarr; Bookmarks &rarr; Export). Existing
+          bookmarks are kept; only new URLs are added.
+        </div>
+        {ioMessage && <div className="panel-note" style={{ color: 'var(--accent)' }}>{ioMessage}</div>}
       </div>
     </section>
   );
