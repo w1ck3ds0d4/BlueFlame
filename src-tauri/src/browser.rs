@@ -810,6 +810,13 @@ pub fn browser_show_active(
     })
 }
 
+/// Background color for popup webviews. Paints the child webview
+/// dark the instant it's created - before the URL loads, before the
+/// JS bundle parses, before React mounts - so the user never sees
+/// the default white flash. Matches `--bg-elev` (#0d0d0d) in App.css,
+/// which the React code sets on `<body>` a few ms later.
+const POPUP_BG_COLOR: tauri::webview::Color = tauri::webview::Color(13, 13, 13, 255);
+
 /// Label of the popup webview so open/close are idempotent.
 const TRUST_PANEL_LABEL: &str = "trust-panel";
 /// Fixed geometry of the site-scan popup. 340 matches the CSS
@@ -892,7 +899,8 @@ pub async fn open_trust_panel(
             .ok_or_else(|| "main window not found".to_string())
             .and_then(|main| {
                 main.add_child(
-                    WebviewBuilder::new(TRUST_PANEL_LABEL, WebviewUrl::External(popup_url_clone)),
+                    WebviewBuilder::new(TRUST_PANEL_LABEL, WebviewUrl::External(popup_url_clone))
+                        .background_color(POPUP_BG_COLOR),
                     LogicalPosition::new(panel_x, panel_y),
                     LogicalSize::new(TRUST_PANEL_WIDTH, panel_h),
                 )
@@ -1015,7 +1023,8 @@ pub async fn open_menu_popup(
             .ok_or_else(|| "main window not found".to_string())
             .and_then(|main| {
                 main.add_child(
-                    WebviewBuilder::new(MENU_POPUP_LABEL, WebviewUrl::External(popup_url_clone)),
+                    WebviewBuilder::new(MENU_POPUP_LABEL, WebviewUrl::External(popup_url_clone))
+                        .background_color(POPUP_BG_COLOR),
                     LogicalPosition::new(panel_x, panel_y),
                     LogicalSize::new(panel_w, panel_h),
                 )

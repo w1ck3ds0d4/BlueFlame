@@ -5,6 +5,26 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tauri + React + Typescript</title>
+    <!--
+      Critical inline CSS: paint the webview dark BEFORE the JS bundle
+      parses and React mounts. Without this, child webviews (menu
+      popup, trust popup) show a white flash until main.tsx applies
+      the body class that sets the dark background - most visible on
+      mobile where the bundle takes longer to load. These colors match
+      --bg / --bg-elev in App.css; the real CSS tokens take over a
+      few ms later and the transition is imperceptible.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #0d0d0d;
+        color: #d9e3ef;
+      }
+      #root {
+        min-height: 100vh;
+      }
+    </style>
   </head>
 
   <body>
