@@ -146,13 +146,22 @@ function hostOf(url: string): string {
   }
 }
 
+/**
+ * Short URL for the tab card preview. Returns `host` or `host/path`
+ * and always drops the query string — tracker-heavy URLs (search
+ * result pages, analytics-tagged links) can be hundreds of chars
+ * and blow out the card width. The full URL still appears in the
+ * mobile address bar once the user picks the tab.
+ */
 function displayUrl(url: string): string {
   if (!url) return '';
   if (url.startsWith('data:')) return 'new tab';
   if (url.startsWith('about:')) return url;
   try {
     const u = new URL(url);
-    return u.host + u.pathname + u.search;
+    const host = u.host.replace(/^www\./, '');
+    // Root `/` is noise; anything deeper is useful context.
+    return u.pathname === '/' ? host : `${host}${u.pathname}`;
   } catch {
     return url;
   }

@@ -2328,6 +2328,12 @@ button {
   cursor: pointer;
   min-height: 100px;
   transition: border-color 120ms ease, background 120ms ease;
+  /* Grid items default to `min-width: auto` (sized to fit content),
+     which lets a long URL in `.tab-card-url` blow past the `1fr 1fr`
+     track size and push the column wider than its sibling. Pin it to
+     0 so the column sticks to its fractional share and the url text
+     inside gets ellipsized instead. */
+  min-width: 0;
 }
 
 .tab-card:hover,
