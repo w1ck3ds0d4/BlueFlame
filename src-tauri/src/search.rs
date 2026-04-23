@@ -6,7 +6,9 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
 /// Supported privacy-aligned search engines. All of these honor
-/// Do-Not-Track and do not require accounts.
+/// Do-Not-Track and do not require accounts. Ahmia indexes `.onion`
+/// sites; result pages load on clearnet but the links require Tor
+/// turned on to follow.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SearchEngine {
@@ -17,6 +19,7 @@ pub enum SearchEngine {
     Mojeek,
     Kagi,
     Ecosia,
+    Ahmia,
 }
 
 impl SearchEngine {
@@ -28,6 +31,7 @@ impl SearchEngine {
             Self::Mojeek => "mojeek",
             Self::Kagi => "kagi",
             Self::Ecosia => "ecosia",
+            Self::Ahmia => "ahmia",
         }
     }
 
@@ -39,6 +43,7 @@ impl SearchEngine {
             Self::Mojeek => "Mojeek",
             Self::Kagi => "Kagi",
             Self::Ecosia => "Ecosia",
+            Self::Ahmia => "Ahmia (.onion)",
         }
     }
 
@@ -52,6 +57,7 @@ impl SearchEngine {
             Self::Mojeek => format!("https://www.mojeek.com/search?q={q}"),
             Self::Kagi => format!("https://kagi.com/search?q={q}"),
             Self::Ecosia => format!("https://www.ecosia.org/search?q={q}"),
+            Self::Ahmia => format!("https://ahmia.fi/search/?q={q}"),
         }
     }
 
@@ -65,6 +71,7 @@ impl SearchEngine {
             Self::Mojeek => "https://www.mojeek.com",
             Self::Kagi => "https://kagi.com",
             Self::Ecosia => "https://www.ecosia.org",
+            Self::Ahmia => "https://ahmia.fi",
         }
     }
 
@@ -76,6 +83,7 @@ impl SearchEngine {
             "mojeek" => Some(Self::Mojeek),
             "kagi" => Some(Self::Kagi),
             "ecosia" => Some(Self::Ecosia),
+            "ahmia" => Some(Self::Ahmia),
             _ => None,
         }
     }
@@ -88,6 +96,7 @@ impl SearchEngine {
             Self::Mojeek,
             Self::Kagi,
             Self::Ecosia,
+            Self::Ahmia,
         ]
     }
 
@@ -102,6 +111,7 @@ impl SearchEngine {
             Self::Mojeek => "www.mojeek.com",
             Self::Kagi => "kagi.com",
             Self::Ecosia => "www.ecosia.org",
+            Self::Ahmia => "ahmia.fi",
         }
     }
 }
