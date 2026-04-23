@@ -70,8 +70,17 @@ pub fn run() {
 
     let debug_log: debug_log::SharedDebugLog = Arc::new(debug_log::DebugLog::default());
 
+    // hudsucker::proxy::internal emits ERROR for every TLS connection
+    // that closes without a close_notify alert (documented rustls
+    // `unexpected_eof` noise: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof)
+    // and for generic transient connect errors whose message ("HTTPS
+    // connect error: connection error") carries no actionable detail.
+    // Both are expected during normal browsing through a MITM proxy
+    // and spam the log + the in-app Debug monitor. Silence the module
+    // in the default filter. Users debugging a genuine proxy bug can
+    // opt back in via `RUST_LOG=hudsucker=debug`.
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| "blueflame=info,hudsucker=warn".into());
+        .unwrap_or_else(|_| "blueflame=info,hudsucker=warn,hudsucker::proxy::internal=off".into());
 
     tracing_subscriber::registry()
         .with(env_filter)
