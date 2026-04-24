@@ -129,7 +129,7 @@ body{{
   margin-bottom:18px;padding-bottom:10px;
   border-bottom:1px solid #262626;
 }}
-.hdr .flame{{ color:#00b3ff; font-size:15px; }}
+.hdr .logo{{ height:22px; width:auto; display:block; transform:translateY(4px); -webkit-user-drag:none; user-select:none; }}
 .hdr h1{{ font-size:14px; font-weight:700; color:#d9e3ef; }}
 .hdr .q{{
   color:#6b7a8e; font-size:11px; margin-left:auto;
@@ -166,7 +166,7 @@ ul{{ list-style:none; }}
 .empty::before{{ content:'// '; color:#00b3ff; }}
 </style></head><body>
 <div class="hdr">
-  <span class="flame">&#x25B2;</span>
+  <img class="logo" src="{logo_url}" alt="" aria-hidden="true">
   <h1>blueflame / search</h1>
   <span class="q">{escaped_q}</span>
 </div>
@@ -174,6 +174,7 @@ ul{{ list-style:none; }}
 {footer}
 </body></html>"#,
         escaped_q = escaped_q,
+        logo_url = crate::brand::logo_data_url(),
         items = if items.is_empty() {
             r#"<li class="empty">NO RESULTS</li>"#.to_string()
         } else {

@@ -2,6 +2,7 @@
 //! load without any external fetch. The page has the BlueFlame brand, a
 //! search box that submits to the user's chosen engine, and quick links.
 
+use crate::brand::logo_data_url;
 use crate::search::SearchEngine;
 use crate::util::base64_encode;
 
@@ -81,10 +82,14 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
     color: var(--text-dim);
     font-size: 12px;
   }}
-  .brand-line .flame {{
-    color: var(--accent); font-size: 16px;
-    display: inline-block;
-    width: 14px; text-align: center;
+  .brand-line .logo {{
+    height: 22px;
+    width: auto;
+    display: block;
+    -webkit-user-drag: none;
+    user-select: none;
+    /* Aligns the logo vertically with the baseline-aligned text. */
+    transform: translateY(4px);
   }}
   .brand-line .name {{ color: var(--text); font-weight: 700; font-size: 16px; }}
   .brand-line .ver {{ color: var(--text-muted); font-size: 11px; }}
@@ -232,7 +237,7 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
 <body>
 <main class="term">
   <div class="brand-line">
-    <span class="flame" aria-hidden="true" id="flame">&#x25B2;</span>
+    <img class="logo" src="{logo_url}" alt="" aria-hidden="true">
     <span class="name">blueflame</span>
     <span class="ver">v0.1</span>
   </div>
@@ -271,14 +276,6 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
     tagEl.textContent += tagText[idx++];
   }}, 35);
 
-  // Text-mode flame: cycle a short set of triangle glyphs so the mark "flickers".
-  const flameEl = document.getElementById('flame');
-  const frames = ['\u25B2', '\u25B4', '\u25B3', '\u25B4'];
-  let f = 0;
-  setInterval(() => {{
-    f = (f + 1) % frames.length;
-    flameEl.textContent = frames[f];
-  }}, 320);
 
   // All engine URL templates baked in so the dropdown can override the
   // default engine just for the search initiated from this new-tab page.
@@ -308,6 +305,7 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
         engine_options = engine_options,
         engine_map = engine_map,
         tiles_html = tiles_html,
+        logo_url = logo_data_url(),
     )
 }
 
