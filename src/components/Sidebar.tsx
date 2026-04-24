@@ -1,4 +1,4 @@
-type View = 'dashboard' | 'bookmarks' | 'settings' | 'debug';
+type View = 'dashboard' | 'bookmarks' | 'metrics' | 'settings' | 'debug';
 
 type StatusKind = 'on' | 'off' | 'starting' | 'booting' | 'failed';
 
@@ -21,6 +21,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { id: 'dashboard', icon: '▮▮▮', label: 'dash' },
   { id: 'bookmarks', icon: '★', label: 'bkm' },
+  { id: 'metrics', icon: '◊', label: 'mtr' },
   { id: 'settings', icon: '[=]', label: 'set' },
   { id: 'debug', icon: '>_', label: 'dbg' },
 ];

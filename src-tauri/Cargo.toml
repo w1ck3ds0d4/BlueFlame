@@ -82,6 +82,12 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 # Parallel filter matching
 rayon = "1"
 
+# Process + system metrics for the "metrics" panel (self-process RSS,
+# CPU %, thread count, descendant webview processes). Default features
+# drop the disk/network sub-modules we don't surface, keeping the
+# transitive tree smaller.
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+
 [features]
 default = ["built-in-tor"]
 built-in-tor = ["dep:arti-client", "dep:tor-rtcompat"]

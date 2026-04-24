@@ -3054,3 +3054,101 @@ html:has(.menu-popup-body) {
     width: 100%;
   }
 }
+
+/* ───── Metrics page ───────────────────────────────────────────── */
+
+.metrics-page {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.metrics-page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.metrics-page-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.metrics-page-empty {
+  padding: 24px 8px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.metrics-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.metric-card {
+  padding: 12px 14px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--mono);
+  transition: border-color 120ms ease;
+}
+
+.metric-card:hover {
+  border-color: var(--accent-border);
+}
+
+.metric-card-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-card-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.1;
+}
+
+.metric-card-sub {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.metric-card-spark {
+  margin-top: 4px;
+  color: var(--accent);
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  /* The block characters already imply a baseline, so match that
+     vertical rhythm with no extra padding - keeps the card compact. */
+}
+
+@media (max-width: 640px) {
+  .metrics-page {
+    padding: 12px;
+  }
+  .metrics-cards {
+    grid-template-columns: 1fr;
+  }
+  .metric-card-value {
+    font-size: 18px;
+  }
+}

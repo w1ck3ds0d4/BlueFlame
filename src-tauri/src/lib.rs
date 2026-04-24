@@ -12,6 +12,7 @@ mod filter_parser;
 mod import_export;
 mod list_loader;
 mod metasearch;
+mod metrics;
 mod new_tab;
 mod proxy;
 mod reputation;
@@ -52,6 +53,7 @@ use context_menu::{
     SharedContextMenuTx, SharedContextStore, SharedContextToken,
 };
 use import_export::{export_data, import_bookmarks_html, import_data};
+use metrics::{get_system_metrics, MetricsCollector, SharedMetrics};
 use proxy::ProxyState;
 use storage::{SharedStore, Store};
 
@@ -121,6 +123,7 @@ pub fn run() {
         .manage(context_token.clone())
         .manage(context_store.clone())
         .manage(context_tx_shared.clone())
+        .manage::<SharedMetrics>(Arc::new(MetricsCollector::default()))
         .setup(move |app| {
             // Open the personal-index store so commands can rely on it being in state.
             let data = app.path().app_data_dir()?;
@@ -270,6 +273,7 @@ pub fn run() {
             export_data,
             import_data,
             import_bookmarks_html,
+            get_system_metrics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running BlueFlame");

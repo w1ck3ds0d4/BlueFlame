@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
 
-type View = 'dashboard' | 'bookmarks' | 'settings' | 'debug';
+type View = 'dashboard' | 'bookmarks' | 'metrics' | 'settings' | 'debug';
 
 type StatusKind = 'on' | 'off' | 'starting' | 'booting' | 'failed';
 
@@ -126,6 +126,7 @@ export function MenuPopup() {
     const items: { id: View; icon: string; label: string }[] = [
       { id: 'dashboard', icon: '▮▮▮', label: 'dash' },
       { id: 'bookmarks', icon: '★', label: 'bkm' },
+      { id: 'metrics', icon: '◊', label: 'mtr' },
       { id: 'settings', icon: '[=]', label: 'set' },
       { id: 'debug', icon: '>_', label: 'dbg' },
     ];

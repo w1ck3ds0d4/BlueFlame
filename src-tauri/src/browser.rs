@@ -343,6 +343,15 @@ impl TabsState {
     pub fn id_at(&self, idx: usize) -> Option<u64> {
         self.tabs.get(idx).map(|t| t.id)
     }
+
+    /// `(total_tabs, private_tabs)` for the metrics panel. Walks the
+    /// tab list once rather than cloning it, so the metrics poll
+    /// doesn't churn allocations on every sample.
+    pub fn tab_counts(&self) -> (u32, u32) {
+        let total = self.tabs.len() as u32;
+        let private = self.tabs.iter().filter(|t| t.private).count() as u32;
+        (total, private)
+    }
 }
 
 pub type Tabs = Mutex<TabsState>;

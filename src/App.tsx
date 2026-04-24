@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Bookmarks } from './components/Bookmarks';
 import { BookmarksBar } from './components/BookmarksBar';
 import { CaTrustModal } from './components/CaTrustModal';
+import { Metrics } from './components/Metrics';
 import { Dashboard } from './components/Dashboard';
 import { Debug } from './components/Debug';
 import { FindBar } from './components/FindBar';
@@ -49,7 +50,7 @@ interface TabsView {
   active_id: number | null;
 }
 
-type View = 'dashboard' | 'bookmarks' | 'settings' | 'debug';
+type View = 'dashboard' | 'bookmarks' | 'metrics' | 'settings' | 'debug';
 
 export default function App() {
   const [view, setView] = useState<View>('dashboard');
@@ -221,7 +222,13 @@ export default function App() {
     const unlisteners: UnlistenFn[] = [];
     listen<string>('blueflame:select-view', (e) => {
       const v = e.payload as View;
-      if (v === 'dashboard' || v === 'bookmarks' || v === 'settings' || v === 'debug') {
+      if (
+        v === 'dashboard' ||
+        v === 'bookmarks' ||
+        v === 'metrics' ||
+        v === 'settings' ||
+        v === 'debug'
+      ) {
         setView(v);
         goHome();
       }
@@ -469,6 +476,8 @@ export default function App() {
         <Dashboard status={status} stats={stats} onToggled={refresh} />
       ) : view === 'bookmarks' ? (
         <Bookmarks version={bookmarksVersion} />
+      ) : view === 'metrics' ? (
+        <Metrics />
       ) : view === 'debug' ? (
         <Debug />
       ) : (
