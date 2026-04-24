@@ -148,7 +148,7 @@ function hostOf(url: string): string {
 
 /**
  * Short URL for the tab card preview. Returns `host` or `host/path`
- * and always drops the query string — tracker-heavy URLs (search
+ * and always drops the query string: tracker-heavy URLs (search
  * result pages, analytics-tagged links) can be hundreds of chars
  * and blow out the card width. The full URL still appears in the
  * mobile address bar once the user picks the tab.

@@ -200,10 +200,10 @@ fn parse_netscape_bookmarks(html: &str) -> Vec<(String, String, i64, String)> {
 
     for cap in token_re.captures_iter(html) {
         if cap.get(1).is_some() {
-            // <DL> — open a folder, consuming the last-seen H3 name.
+            // <DL>: open a folder, consuming the last-seen H3 name.
             stack.push(pending.take().unwrap_or_default());
         } else if cap.get(2).is_some() {
-            // </DL> — close the innermost folder.
+            // </DL>: close the innermost folder.
             stack.pop();
             pending = None;
         } else if let Some(h3) = cap.get(3) {
