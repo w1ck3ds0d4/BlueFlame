@@ -627,7 +627,7 @@ dependencies = [
  "image",
  "percent-encoding",
  "rayon",
- "rcgen",
+ "rcgen 0.14.7",
  "regex",
  "reqwest 0.12.28",
  "rusqlite",
@@ -2738,7 +2738,7 @@ dependencies = [
  "hyper-util",
  "moka",
  "rand 0.8.6",
- "rcgen",
+ "rcgen 0.13.2",
  "thiserror 1.0.69",
  "time",
  "tokio",
@@ -4934,6 +4934,20 @@ dependencies = [
  "rustls-pki-types",
  "time",
  "x509-parser 0.16.0",
+ "yasna",
+]
+
+[[package]]
+name = "rcgen"
+version = "0.14.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10b99e0098aa4082912d4c649628623db6aba77335e4f4569ff5083a6448b32e"
+dependencies = [
+ "pem",
+ "ring",
+ "rustls-pki-types",
+ "time",
+ "x509-parser 0.18.1",
  "yasna",
 ]
 
@@ -9134,6 +9148,7 @@ dependencies = [
  "lazy_static",
  "nom",
  "oid-registry 0.8.1",
+ "ring",
  "rusticata-macros",
  "thiserror 2.0.18",
  "time",

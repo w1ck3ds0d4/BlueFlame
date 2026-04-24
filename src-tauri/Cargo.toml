@@ -40,7 +40,7 @@ arti-client = { version = "0.34", default-features = false, features = ["tokio",
 tor-rtcompat = { version = "0.34", default-features = false, features = ["tokio", "rustls"], optional = true }
 
 # TLS and CA cert generation
-rcgen = "0.13"
+rcgen = "0.14"
 rustls = "0.23"
 rustls-pemfile = "2"
 # Parse upstream-server certificates for trust-score signals (issuer,
