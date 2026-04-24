@@ -36,7 +36,7 @@ tower-service = "0.3"
 # Embedded Tor client (no external tor daemon needed). Gated behind a
 # Cargo feature because arti pulls in a large dependency tree; default
 # features include it so `pnpm tauri dev` / build ship it unchanged.
-arti-client = { version = "0.34", default-features = false, features = ["tokio", "rustls"], optional = true }
+arti-client = { version = "0.41", default-features = false, features = ["tokio", "rustls"], optional = true }
 tor-rtcompat = { version = "0.34", default-features = false, features = ["tokio", "rustls"], optional = true }
 
 # TLS and CA cert generation
