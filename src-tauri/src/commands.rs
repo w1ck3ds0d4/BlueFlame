@@ -237,6 +237,47 @@ pub async fn bookmark_list(
 }
 
 #[tauri::command]
+pub async fn bookmark_set_folder(
+    store: tauri::State<'_, crate::storage::SharedStore>,
+    url: String,
+    folder: String,
+) -> Result<(), String> {
+    let s = store.lock().map_err(|e| format!("lock store: {e}"))?;
+    s.set_bookmark_folder(&url, folder.trim())
+        .map_err(|e| format!("set folder: {e}"))
+}
+
+#[tauri::command]
+pub async fn bookmark_folders(
+    store: tauri::State<'_, crate::storage::SharedStore>,
+) -> Result<Vec<String>, String> {
+    let s = store.lock().map_err(|e| format!("lock store: {e}"))?;
+    s.list_bookmark_folders()
+        .map_err(|e| format!("list folders: {e}"))
+}
+
+#[tauri::command]
+pub async fn bookmark_rename_folder(
+    store: tauri::State<'_, crate::storage::SharedStore>,
+    old: String,
+    new: String,
+) -> Result<(), String> {
+    let s = store.lock().map_err(|e| format!("lock store: {e}"))?;
+    s.rename_bookmark_folder(old.trim(), new.trim())
+        .map_err(|e| format!("rename folder: {e}"))
+}
+
+#[tauri::command]
+pub async fn bookmark_delete_folder(
+    store: tauri::State<'_, crate::storage::SharedStore>,
+    folder: String,
+) -> Result<usize, String> {
+    let s = store.lock().map_err(|e| format!("lock store: {e}"))?;
+    s.delete_bookmark_folder(folder.trim())
+        .map_err(|e| format!("delete folder: {e}"))
+}
+
+#[tauri::command]
 pub async fn set_metasearch_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     let data = app
         .path()

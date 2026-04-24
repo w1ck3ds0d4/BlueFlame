@@ -1053,6 +1053,76 @@ button {
   text-overflow: ellipsis;
 }
 
+.bookmark-folder {
+  position: relative;
+}
+
+.bookmark-folder-chip.open {
+  color: var(--accent);
+}
+
+.bookmark-folder-chip.open::before,
+.bookmark-folder-chip.open::after {
+  color: var(--accent);
+}
+
+.bookmark-folder-icon {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.bookmark-folder-chip.open .bookmark-folder-icon {
+  color: var(--accent);
+  transform: rotate(90deg);
+}
+
+.bookmark-folder-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 220px;
+  max-width: 360px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  padding: 4px 0;
+}
+
+.bookmark-folder-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 10px;
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bookmark-folder-item:hover {
+  color: var(--accent);
+  background: var(--bg);
+}
+
+.bookmark-folder-item-path {
+  color: var(--text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.bookmark-folder-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .engine-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
@@ -1199,6 +1269,201 @@ button {
 .pi-meta {
   color: var(--text-muted);
   font-size: 10px;
+}
+
+.pi-folder {
+  margin-bottom: 6px;
+}
+
+.pi-folder-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  transition: color 120ms ease;
+}
+
+.pi-folder-header:hover {
+  color: var(--accent);
+}
+
+.pi-folder-caret {
+  color: var(--text-muted);
+  font-size: 10px;
+  min-width: 10px;
+}
+
+.pi-folder-header:hover .pi-folder-caret {
+  color: var(--accent);
+}
+
+.pi-folder-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pi-folder-count {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.pi-bookmark-row {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+.pi-move-btn {
+  padding: 3px 8px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.pi-move-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.pi-modal-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  padding: 16px;
+}
+
+.pi-modal {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  padding: 16px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-family: var(--mono);
+}
+
+.pi-modal-title {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: lowercase;
+}
+
+.pi-modal-subtitle {
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pi-modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 40vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  padding: 4px;
+}
+
+.pi-modal-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.pi-modal-option:hover {
+  background: var(--bg);
+  color: var(--accent);
+}
+
+.pi-modal-option.current {
+  color: var(--accent);
+}
+
+.pi-modal-option-current {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.pi-modal-new {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pi-modal-new label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.pi-modal-new-row {
+  display: flex;
+  gap: 6px;
+}
+
+.pi-modal-new-row .url-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pi-modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .pi-bookmark-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'title move'
+      'url url';
+    gap: 4px 8px;
+  }
+  .pi-bookmark-row .pi-title {
+    grid-area: title;
+  }
+  .pi-bookmark-row .pi-url {
+    grid-area: url;
+  }
+  .pi-bookmark-row .pi-move-btn {
+    grid-area: move;
+  }
+  .pi-modal {
+    padding: 12px;
+  }
 }
 
 .nav {

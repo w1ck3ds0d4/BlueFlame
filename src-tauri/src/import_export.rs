@@ -39,6 +39,11 @@ pub struct BookmarkExport {
     pub url: String,
     pub title: String,
     pub created_at: i64,
+    /// Slash-separated folder path. Empty string = root. Older backups
+    /// (from before folder support) omit this field; serde defaults it
+    /// to "" so those files still import.
+    #[serde(default)]
+    pub folder: String,
 }
 
 #[derive(Serialize)]
@@ -78,6 +83,7 @@ pub async fn export_data(
                 url: b.url,
                 title: b.title,
                 created_at: b.created_at,
+                folder: b.folder,
             })
             .collect()
     };
@@ -124,7 +130,7 @@ pub async fn import_data(
                 skipped += 1;
                 continue;
             }
-            match s.insert_bookmark_if_new(&b.url, &b.title, b.created_at) {
+            match s.insert_bookmark_if_new(&b.url, &b.title, b.created_at, &b.folder) {
                 Ok(true) => imported += 1,
                 Ok(false) => skipped += 1,
                 Err(_) => skipped += 1,
@@ -151,9 +157,9 @@ pub async fn import_bookmarks_html(
 
     let mut imported = 0usize;
     let mut skipped = 0usize;
-    for (url, title, add_date) in bookmarks {
+    for (url, title, add_date, folder) in bookmarks {
         let ts = if add_date > 0 { add_date } else { now };
-        match s.insert_bookmark_if_new(&url, &title, ts) {
+        match s.insert_bookmark_if_new(&url, &title, ts, &folder) {
             Ok(true) => imported += 1,
             Ok(false) => skipped += 1,
             Err(_) => skipped += 1,
@@ -167,44 +173,72 @@ pub async fn import_bookmarks_html(
     })
 }
 
-/// Pull `(url, title, add_date)` triples out of a Netscape-format
+/// Pull `(url, title, add_date, folder)` tuples out of a Netscape-format
 /// bookmark export. All mainstream browsers write this format when the
-/// user picks "Export bookmarks": `<DT><A HREF="..." ADD_DATE="...">Title</A>`.
-/// Attribute order, case, and surrounding whitespace vary across
-/// browsers, so the parser is lenient. `add_date` is epoch seconds; 0
-/// when the attribute is missing.
-fn parse_netscape_bookmarks(html: &str) -> Vec<(String, String, i64)> {
-    let anchor_re = Regex::new(r#"(?is)<a\s+([^>]*?)>(.*?)</a>"#).expect("static regex");
+/// user picks "Export bookmarks": folders are nested `<DL>` blocks whose
+/// header is a preceding `<H3>` element, bookmarks are `<DT><A HREF="..."
+/// ADD_DATE="...">Title</A>`. Attribute order, case, and whitespace vary
+/// so the tokenizer is lenient. `folder` is a slash-separated path, empty
+/// for root bookmarks; `add_date` is epoch seconds, 0 when missing.
+fn parse_netscape_bookmarks(html: &str) -> Vec<(String, String, i64, String)> {
+    // Token regex: match any of <DL>, </DL>, <H3>...</H3>, <A ...>...</A>
+    // in document order. Each arm gets its own capture group so we can
+    // tell which kind of token fired.
+    let token_re =
+        Regex::new(r#"(?is)(<dl\b[^>]*>)|(</dl>)|<h3[^>]*>(.*?)</h3>|<a\s+([^>]*?)>(.*?)</a>"#)
+            .expect("static regex");
     let href_re = Regex::new(r#"(?i)href\s*=\s*"([^"]*)""#).expect("static regex");
     let date_re = Regex::new(r#"(?i)add_date\s*=\s*"(\d+)""#).expect("static regex");
 
+    // `stack`: active folder names (innermost last). Each `<DL>` open
+    // consumes `pending` and pushes it; `</DL>` pops. Empty strings are
+    // filtered out when joining so the outer (unnamed) `<DL>` wrapping
+    // the whole file doesn't add an empty path segment.
+    let mut stack: Vec<String> = Vec::new();
+    let mut pending: Option<String> = None;
     let mut out = Vec::new();
-    for cap in anchor_re.captures_iter(html) {
-        let attrs = &cap[1];
-        let inner = &cap[2];
-        let Some(href) = href_re.captures(attrs).and_then(|c| c.get(1)) else {
-            continue;
-        };
-        let url = href.as_str().trim();
-        if url.is_empty() {
-            continue;
+
+    for cap in token_re.captures_iter(html) {
+        if cap.get(1).is_some() {
+            // <DL> — open a folder, consuming the last-seen H3 name.
+            stack.push(pending.take().unwrap_or_default());
+        } else if cap.get(2).is_some() {
+            // </DL> — close the innermost folder.
+            stack.pop();
+            pending = None;
+        } else if let Some(h3) = cap.get(3) {
+            pending = Some(strip_tags(h3.as_str()).trim().to_string());
+        } else if let (Some(attrs), Some(inner)) = (cap.get(4), cap.get(5)) {
+            let Some(href) = href_re.captures(attrs.as_str()).and_then(|c| c.get(1)) else {
+                continue;
+            };
+            let url = href.as_str().trim();
+            if url.is_empty() {
+                continue;
+            }
+            let lower = url.to_ascii_lowercase();
+            // Skip feed:// and place: pseudo-urls that Firefox writes for folders.
+            if !(lower.starts_with("http://")
+                || lower.starts_with("https://")
+                || lower.starts_with("ftp://")
+                || lower.starts_with("file://"))
+            {
+                continue;
+            }
+            let title = strip_tags(inner.as_str()).trim().to_string();
+            let add_date = date_re
+                .captures(attrs.as_str())
+                .and_then(|c| c.get(1))
+                .and_then(|m| m.as_str().parse::<i64>().ok())
+                .unwrap_or(0);
+            let folder = stack
+                .iter()
+                .filter(|s| !s.is_empty())
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("/");
+            out.push((url.to_string(), title, add_date, folder));
         }
-        let lower = url.to_ascii_lowercase();
-        // Skip feed:// and place: pseudo-urls that Firefox writes for folders.
-        if !(lower.starts_with("http://")
-            || lower.starts_with("https://")
-            || lower.starts_with("ftp://")
-            || lower.starts_with("file://"))
-        {
-            continue;
-        }
-        let title = strip_tags(inner).trim().to_string();
-        let add_date = date_re
-            .captures(attrs)
-            .and_then(|c| c.get(1))
-            .and_then(|m| m.as_str().parse::<i64>().ok())
-            .unwrap_or(0);
-        out.push((url.to_string(), title, add_date));
     }
     out
 }
@@ -240,15 +274,20 @@ mod tests {
         assert_eq!(got[0].0, "https://rust-lang.org/");
         assert_eq!(got[0].1, "Rust");
         assert_eq!(got[0].2, 1700000000);
+        assert_eq!(got[0].3, ""); // root folder
     }
 
     #[test]
     fn skips_folder_placeholders_and_non_http() {
         let html = r#"
-<DT><H3>My Folder</H3>
+<DL><p>
+<DT><H3>Some Folder</H3>
+<DL><p>
 <DT><A HREF="place:type=6">Folder view</A>
 <DT><A HREF="">empty</A>
+</DL><p>
 <DT><A HREF="https://ok.example">ok</A>
+</DL>
 "#;
         let got = parse_netscape_bookmarks(html);
         assert_eq!(got.len(), 1);
@@ -267,5 +306,37 @@ mod tests {
         let html = r#"<DT><A HREF="https://a.example">x</A>"#;
         let got = parse_netscape_bookmarks(html);
         assert_eq!(got[0].2, 0);
+    }
+
+    #[test]
+    fn tracks_nested_folders_as_slash_paths() {
+        let html = r#"
+<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p>
+    <DT><A HREF="https://root.example">root</A>
+    <DT><H3 ADD_DATE="1700000000">Work</H3>
+    <DL><p>
+        <DT><A HREF="https://work.example">work1</A>
+        <DT><H3>Dev</H3>
+        <DL><p>
+            <DT><A HREF="https://dev.example">dev1</A>
+        </DL><p>
+    </DL><p>
+    <DT><H3>Personal</H3>
+    <DL><p>
+        <DT><A HREF="https://p.example">p1</A>
+    </DL><p>
+    <DT><A HREF="https://root2.example">root2</A>
+</DL>"#;
+        let got = parse_netscape_bookmarks(html);
+        let by_url: std::collections::HashMap<_, _> = got
+            .iter()
+            .map(|(u, _, _, f)| (u.as_str(), f.as_str()))
+            .collect();
+        assert_eq!(by_url["https://root.example"], "");
+        assert_eq!(by_url["https://work.example"], "Work");
+        assert_eq!(by_url["https://dev.example"], "Work/Dev");
+        assert_eq!(by_url["https://p.example"], "Personal");
+        assert_eq!(by_url["https://root2.example"], "");
     }
 }

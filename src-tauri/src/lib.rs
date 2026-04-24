@@ -36,7 +36,8 @@ use browser::{
     resize_menu_popup, Tabs,
 };
 use commands::{
-    bookmark_is, bookmark_list, bookmark_toggle, clear_block_log, clear_debug_log, disable_filters,
+    bookmark_delete_folder, bookmark_folders, bookmark_is, bookmark_list, bookmark_rename_folder,
+    bookmark_set_folder, bookmark_toggle, clear_block_log, clear_debug_log, disable_filters,
     enable_filters, get_blocks_for_host, get_ca_cert_path, get_ca_trust_status, get_debug_log,
     get_favicon, get_filter_lists, get_metasearch_enabled, get_mobile_ua, get_proxy_status,
     get_recent_blocks, get_reputation_feeds, get_search_engine, get_stats, get_system_summary,
@@ -185,6 +186,10 @@ pub fn run() {
             bookmark_toggle,
             bookmark_is,
             bookmark_list,
+            bookmark_set_folder,
+            bookmark_folders,
+            bookmark_rename_folder,
+            bookmark_delete_folder,
             get_system_summary,
             get_debug_log,
             clear_debug_log,

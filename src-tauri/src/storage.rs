@@ -34,12 +34,15 @@ pub struct Visit {
     pub visit_count: i64,
 }
 
-/// One bookmark entry.
+/// One bookmark entry. `folder` is a slash-separated path
+/// (e.g. `"Work/Dev"`); empty string means the bookmark sits at
+/// the root.
 #[derive(Debug, Clone, Serialize)]
 pub struct Bookmark {
     pub url: String,
     pub title: String,
     pub created_at: i64,
+    pub folder: String,
 }
 
 /// One trust-score sample for a host at a point in time. The UI plots
@@ -100,7 +103,8 @@ impl Store {
             create table if not exists bookmarks (
                 url text primary key,
                 title text,
-                created_at integer not null
+                created_at integer not null,
+                folder text not null default ''
             );
 
             -- Score samples over time per host so the trust panel can
@@ -119,6 +123,25 @@ impl Store {
                 trust_samples(host, recorded_at desc);
             "#,
         )?;
+
+        // Migration: older installs created the bookmarks table before
+        // folders existed. `pragma_table_info` lets us detect the old
+        // shape and `alter table` it forward. Idempotent - on fresh
+        // installs the column is already there from the `create table`
+        // above, so the alter is skipped.
+        let has_folder: bool = self
+            .conn
+            .prepare("select 1 from pragma_table_info('bookmarks') where name = 'folder'")?
+            .query([])?
+            .next()?
+            .is_some();
+        if !has_folder {
+            self.conn.execute(
+                "alter table bookmarks add column folder text not null default ''",
+                [],
+            )?;
+        }
+
         Ok(())
     }
 
@@ -289,7 +312,7 @@ impl Store {
             Ok(false)
         } else {
             self.conn.execute(
-                "insert into bookmarks (url, title, created_at) values (?1, ?2, ?3)",
+                "insert into bookmarks (url, title, created_at, folder) values (?1, ?2, ?3, '')",
                 params![url, title, now_secs()],
             )?;
             Ok(true)
@@ -299,19 +322,88 @@ impl Store {
     /// Insert a bookmark only if its url isn't already bookmarked.
     /// Returns `true` if a row was inserted, `false` if the url already existed.
     /// Used by import flows so re-importing doesn't overwrite existing
-    /// `created_at` timestamps or duplicate entries.
+    /// `created_at` timestamps, folder assignments, or duplicate entries.
     pub fn insert_bookmark_if_new(
         &self,
         url: &str,
         title: &str,
         created_at: i64,
+        folder: &str,
     ) -> anyhow::Result<bool> {
         let inserted = self.conn.execute(
-            "insert into bookmarks (url, title, created_at) values (?1, ?2, ?3)
+            "insert into bookmarks (url, title, created_at, folder) values (?1, ?2, ?3, ?4)
              on conflict(url) do nothing",
-            params![url, title, created_at],
+            params![url, title, created_at, folder],
         )?;
         Ok(inserted > 0)
+    }
+
+    /// Move a bookmark to a folder (slash-separated path). Empty string
+    /// puts it back at the root. No-ops if the url isn't bookmarked.
+    pub fn set_bookmark_folder(&self, url: &str, folder: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "update bookmarks set folder = ?2 where url = ?1",
+            params![url, folder],
+        )?;
+        Ok(())
+    }
+
+    /// All distinct non-empty folder paths currently used by bookmarks,
+    /// sorted. Empty folders naturally disappear since this reads from
+    /// the bookmarks table.
+    pub fn list_bookmark_folders(&self) -> anyhow::Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("select distinct folder from bookmarks where folder <> '' order by folder")?;
+        let rows = stmt
+            .query_map([], |r| r.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Rename a folder. If `old` has children (e.g. renaming `Work`
+    /// when `Work/Dev` exists), those child paths are rewritten too.
+    /// Passing `new == ""` effectively moves every bookmark in the
+    /// folder (and its subfolders) to the root.
+    pub fn rename_bookmark_folder(&self, old: &str, new: &str) -> anyhow::Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "update bookmarks set folder = ?2 where folder = ?1",
+            params![old, new],
+        )?;
+        // Rewrite descendants: `Work/*` -> `NewName/*`. Empty `new`
+        // promotes children to the root by stripping the old prefix.
+        let child_prefix = format!("{old}/");
+        let new_prefix = if new.is_empty() {
+            String::new()
+        } else {
+            format!("{new}/")
+        };
+        // substr() in SQLite indexes 1-based by characters (codepoints),
+        // so use .chars().count() rather than .len() (bytes) to stay
+        // correct for non-ASCII folder names.
+        let substr_from = child_prefix.chars().count() as i64 + 1;
+        tx.execute(
+            "update bookmarks
+             set folder = ?2 || substr(folder, ?3)
+             where folder like ?1 || '%' escape '\\' and folder <> ?4",
+            params![escape_like(&child_prefix), new_prefix, substr_from, old],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Delete every bookmark inside a folder (and its subfolders).
+    pub fn delete_bookmark_folder(&self, folder: &str) -> anyhow::Result<usize> {
+        let child_prefix = format!("{folder}/");
+        let tx = self.conn.unchecked_transaction()?;
+        let direct = tx.execute("delete from bookmarks where folder = ?1", params![folder])?;
+        let nested = tx.execute(
+            "delete from bookmarks where folder like ?1 || '%' escape '\\'",
+            params![escape_like(&child_prefix)],
+        )?;
+        tx.commit()?;
+        Ok(direct + nested)
     }
 
     pub fn is_bookmarked(&self, url: &str) -> anyhow::Result<bool> {
@@ -383,7 +475,7 @@ impl Store {
 
     pub fn list_bookmarks(&self) -> anyhow::Result<Vec<Bookmark>> {
         let mut stmt = self.conn.prepare(
-            "select url, title, created_at from bookmarks order by created_at desc, rowid desc",
+            "select url, title, created_at, folder from bookmarks order by created_at desc, rowid desc",
         )?;
         let rows = stmt
             .query_map([], |row| {
@@ -391,6 +483,7 @@ impl Store {
                     url: row.get(0)?,
                     title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
                     created_at: row.get(2)?,
+                    folder: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
