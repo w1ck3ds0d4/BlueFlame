@@ -225,7 +225,7 @@ impl HttpHandler for BlueFlameHandler {
         // Short-circuit before touching stats/filters so they don't
         // count toward the user's browsing numbers.
         if req.uri().host() == Some("blueflame.ipc") {
-            let handled = self.handle_context_sentinel(&req);
+            let handled = self.handle_context_sentinel(req).await;
             let res = Response::builder()
                 .status(if handled {
                     StatusCode::NO_CONTENT
@@ -378,15 +378,30 @@ impl BlueFlameHandler {
     /// Returns `true` if the token matched and a context-menu request
     /// was dispatched to the consumer task. Malformed or bad-token
     /// requests return `false` so the caller can respond with 403.
-    fn handle_context_sentinel(&self, req: &Request<Body>) -> bool {
-        let query = match req.uri().query() {
-            Some(q) => q,
-            None => return false,
+    async fn handle_context_sentinel(&self, req: Request<Body>) -> bool {
+        use http_body_util::BodyExt;
+        // Params live in the POST body (form-urlencoded). We used to
+        // put them in the query string, but page URLs + selected
+        // text pushed us past hyper's 4 KB URI cap on long-link
+        // pages (#99 repro: right-click on a hn results page
+        // logged "URI too long" and the menu never opened). The
+        // body has no practical size limit for our tiny payloads.
+        // For backwards-safety we also accept query-string form.
+        let query_bytes = req.uri().query().map(|q| q.as_bytes().to_vec());
+        let (_parts, body) = req.into_parts();
+        let body_bytes = match body.collect().await {
+            Ok(b) => b.to_bytes(),
+            Err(_) => return false,
         };
-        let pairs: std::collections::HashMap<String, String> =
-            url::form_urlencoded::parse(query.as_bytes())
+        let mut pairs: std::collections::HashMap<String, String> =
+            url::form_urlencoded::parse(&body_bytes)
                 .into_owned()
                 .collect();
+        if pairs.is_empty() {
+            if let Some(q) = query_bytes.as_deref() {
+                pairs = url::form_urlencoded::parse(q).into_owned().collect();
+            }
+        }
 
         let provided = match pairs.get("token") {
             Some(t) => t.as_str(),

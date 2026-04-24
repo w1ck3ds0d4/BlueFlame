@@ -97,29 +97,41 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
         }
     }
 
-    function send(ctx) {
+    // Post form-encoded data to the sentinel. We put *all* params
+    // in the BODY rather than the URL because pages with long URLs
+    // (search result pages, docs with deep anchors) were pushing
+    // our sentinel URI past hyper's 4 KB limit, which made the
+    // proxy drop the request with "URI too long" and the menu
+    // never opened.
+    function post(params) {
         try {
-            var qs = new URLSearchParams();
-            qs.set("token", BF_TOKEN);
-            qs.set("page", location.href);
-            qs.set("x", String(Math.round(ctx.x)));
-            qs.set("y", String(Math.round(ctx.y)));
-            if (ctx.link) qs.set("link", ctx.link);
-            if (ctx.linkText) qs.set("linkText", ctx.linkText);
-            if (ctx.image) qs.set("image", ctx.image);
-            if (ctx.sel) qs.set("sel", ctx.sel);
-            var url = SENTINEL + "?" + qs.toString();
+            params.set("token", BF_TOKEN);
+            var body = params.toString();
+            var blob = new Blob([body], { type: "application/x-www-form-urlencoded" });
             if (navigator.sendBeacon) {
-                // Empty body with the sentinel path + query string is
-                // enough: the proxy reads everything out of the URL.
-                navigator.sendBeacon(url);
+                navigator.sendBeacon(SENTINEL, blob);
             } else {
-                // Fallback: fire-and-forget POST. Some webviews
-                // disable sendBeacon; fetch with keepalive gives us
-                // the same semantics.
-                fetch(url, { method: "POST", keepalive: true }).catch(function () {});
+                // Fallback: some webviews restrict sendBeacon.
+                // keepalive on fetch gives the same fire-and-forget
+                // semantics when the page is unloading.
+                fetch(SENTINEL, {
+                    method: "POST",
+                    body: blob,
+                    keepalive: true,
+                }).catch(function () {});
             }
         } catch (_) { /* swallow - never break the page */ }
+    }
+    function send(ctx) {
+        var p = new URLSearchParams();
+        p.set("page", location.href);
+        p.set("x", String(Math.round(ctx.x)));
+        p.set("y", String(Math.round(ctx.y)));
+        if (ctx.link) p.set("link", ctx.link);
+        if (ctx.linkText) p.set("linkText", ctx.linkText);
+        if (ctx.image) p.set("image", ctx.image);
+        if (ctx.sel) p.set("sel", ctx.sel);
+        post(p);
     }
 
     function build(target, clientX, clientY) {
@@ -145,14 +157,9 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
     function dismissSentinel() {
         if (!menuOpen) return;
         menuOpen = false;
-        try {
-            var qs = new URLSearchParams();
-            qs.set("token", BF_TOKEN);
-            qs.set("dismiss", "1");
-            var url = SENTINEL + "?" + qs.toString();
-            if (navigator.sendBeacon) navigator.sendBeacon(url);
-            else fetch(url, { method: "POST", keepalive: true }).catch(function () {});
-        } catch (_) { /* ignore */ }
+        var p = new URLSearchParams();
+        p.set("dismiss", "1");
+        post(p);
     }
 
     // Desktop right-click + most webviews' long-press → contextmenu.
@@ -173,16 +180,11 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
         if (e.button !== 1) return;
         var link = climbForLink(e.target);
         if (!link || !link.href) return;
-        try {
-            e.preventDefault();
-            var qs = new URLSearchParams();
-            qs.set("token", BF_TOKEN);
-            qs.set("action", "middleclick");
-            qs.set("url", link.href);
-            var url = SENTINEL + "?" + qs.toString();
-            if (navigator.sendBeacon) navigator.sendBeacon(url);
-            else fetch(url, { method: "POST", keepalive: true }).catch(function () {});
-        } catch (_) { /* ignore */ }
+        e.preventDefault();
+        var p = new URLSearchParams();
+        p.set("action", "middleclick");
+        p.set("url", link.href);
+        post(p);
     }, true);
     window.addEventListener("click", dismissSentinel, true);
 
@@ -197,16 +199,11 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
         "1", "2", "3", "4", "5", "6", "7", "8", "9",
     ]);
     function sendKbd(key, shift) {
-        try {
-            var qs = new URLSearchParams();
-            qs.set("token", BF_TOKEN);
-            qs.set("action", "kbd");
-            qs.set("key", key);
-            qs.set("shift", shift ? "1" : "0");
-            var url = SENTINEL + "?" + qs.toString();
-            if (navigator.sendBeacon) navigator.sendBeacon(url);
-            else fetch(url, { method: "POST", keepalive: true }).catch(function () {});
-        } catch (_) { /* ignore */ }
+        var p = new URLSearchParams();
+        p.set("action", "kbd");
+        p.set("key", key);
+        p.set("shift", shift ? "1" : "0");
+        post(p);
     }
     window.addEventListener("keydown", function (e) {
         if (e.key === "Escape") { dismissSentinel(); return; }
