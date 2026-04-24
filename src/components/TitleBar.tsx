@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { FLAME_FRAMES, useAsciiFrames } from '../ascii';
+import logoUrl from '../assets/LOGO-GRADIENT.BF.png';
 
 interface Props {
   /** Whether the shell is in mobile mode. On mobile the titlebar
@@ -11,7 +11,6 @@ interface Props {
 
 export function TitleBar({ mobile }: Props) {
   const [maximized, setMaximized] = useState(false);
-  const flame = useAsciiFrames(FLAME_FRAMES, 320, !mobile);
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -45,9 +44,7 @@ export function TitleBar({ mobile }: Props) {
     <div className={`titlebar ${mobile ? 'titlebar-mobile' : ''}`} data-tauri-drag-region>
       {!mobile && (
         <div className="titlebar-brand" data-tauri-drag-region>
-          <span className="titlebar-flame" aria-hidden>
-            {flame}
-          </span>
+          <img className="titlebar-logo" src={logoUrl} alt="" aria-hidden />
           <span className="titlebar-title">blueflame</span>
         </div>
       )}

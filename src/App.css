@@ -226,11 +226,15 @@ button {
   font-weight: 700;
 }
 
-.titlebar-flame {
-  color: var(--accent);
-  font-size: 13px;
-  width: 12px;
-  text-align: center;
+.titlebar-logo {
+  height: 20px;
+  width: auto;
+  display: block;
+  /* -webkit-user-drag keeps the image from being drag-grabbed
+     out of the titlebar region (which would swallow drag events
+     meant for data-tauri-drag-region). */
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .titlebar-title {
