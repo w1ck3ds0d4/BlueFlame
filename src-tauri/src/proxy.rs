@@ -637,13 +637,13 @@ fn download_saved_html(entry: &crate::downloads::DownloadEntry) -> String {
     format!(
         r#"<!doctype html><html><head><meta charset="utf-8"><title>Saved</title>
 <style>
-  body {{ margin:0; padding:48px 24px; background:#0a0a0a; color:#d9e3ef; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; }}
+  body {{ margin:0; padding:48px 24px; background:#0a0a0a; color:#d9e3ef; font-family:ui-monospace,Menlo,Consolas,monospace; font-size: 14px; }}
   main {{ max-width:720px; margin:0 auto; }}
-  h1 {{ color:#00b3ff; font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin:0 0 16px; }}
+  h1 {{ color:#00b3ff; font-size: 15px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin:0 0 16px; }}
   .row {{ margin:8px 0; }}
   .k {{ color:#6b7a8e; display:inline-block; min-width:90px; }}
   .v {{ color:#d9e3ef; }}
-  .hint {{ margin-top:18px; color:#4a5363; font-size:11px; }}
+  .hint {{ margin-top:18px; color:#4a5363; font-size: 12px; }}
 </style></head><body><main>
 <h1>// download saved</h1>
 <div class="row"><span class="k">name:</span> <span class="v">{filename}</span></div>
@@ -659,9 +659,9 @@ fn download_error_stub(url: &str, reason: &str) -> Response<Body> {
     let body_html = format!(
         r#"<!doctype html><html><head><meta charset="utf-8"><title>Download failed</title>
 <style>
-  body {{ margin:0; padding:48px 24px; background:#0a0a0a; color:#d9e3ef; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; }}
+  body {{ margin:0; padding:48px 24px; background:#0a0a0a; color:#d9e3ef; font-family:ui-monospace,Menlo,Consolas,monospace; font-size: 14px; }}
   main {{ max-width:720px; margin:0 auto; }}
-  h1 {{ color:#ff4a5c; font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin:0 0 16px; }}
+  h1 {{ color:#ff4a5c; font-size: 15px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin:0 0 16px; }}
   .row {{ margin:8px 0; }}
   .k {{ color:#6b7a8e; display:inline-block; min-width:90px; }}
   .v {{ color:#d9e3ef; word-break:break-all; }}

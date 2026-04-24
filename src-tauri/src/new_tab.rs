@@ -73,14 +73,14 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
     background: var(--bg);
     color: var(--text);
     padding: 48px 24px 24px;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.55;
   }}
   .term {{ max-width: 760px; margin: 0 auto; }}
   .brand-line {{
     display: flex; align-items: baseline; gap: 10px;
     color: var(--text-dim);
-    font-size: 12px;
+    font-size: 13px;
   }}
   .brand-line .logo {{
     height: 22px;
@@ -92,9 +92,9 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
     transform: translateY(4px);
   }}
   .brand-line .name {{ color: var(--text); font-weight: 700; font-size: 16px; }}
-  .brand-line .ver {{ color: var(--text-muted); font-size: 11px; }}
+  .brand-line .ver {{ color: var(--text-muted); font-size: 12px; }}
   .tag {{
-    color: var(--text-dim); font-size: 12px;
+    color: var(--text-dim); font-size: 13px;
     margin: 6px 0 22px;
     min-height: 18px;
     white-space: pre-wrap;
@@ -118,7 +118,7 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
     padding: 0 10px;
     color: var(--accent);
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 14px;
     line-height: 34px;
     user-select: none;
   }}
@@ -128,7 +128,7 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
     border: none;
     color: var(--text);
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 14px;
     outline: none;
     width: 100%;
   }}
@@ -140,14 +140,14 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
     border: none;
     font-family: var(--mono);
     font-weight: 700;
-    font-size: 11px;
+    font-size: 12px;
     cursor: pointer;
   }}
   button.go:hover {{ background: var(--accent-bright); }}
   .meta {{
     margin-top: 10px;
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: 12px;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -160,7 +160,7 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
     border-radius: 0;
     color: var(--accent);
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 12px;
     padding: 2px 6px;
     cursor: pointer;
     outline: none;
@@ -175,7 +175,7 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
     margin-top: 30px;
   }}
   .section-label {{
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-dim);
     margin-bottom: 8px;
   }}
@@ -187,7 +187,7 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
   .shortcuts a {{
     padding: 4px 12px;
     color: var(--text-dim);
-    font-size: 12px;
+    font-size: 13px;
     text-decoration: none;
     transition: color 120ms ease;
   }}
@@ -206,7 +206,7 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
     grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.2fr);
     gap: 12px;
     padding: 5px 10px;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-dim);
     text-decoration: none;
     border-bottom: 1px solid var(--border);
@@ -223,13 +223,13 @@ fn render(engine: SearchEngine, tiles: &[Tile]) -> String {
   .sd-row:hover .sd-title {{ color: var(--accent-bright); }}
   .sd-url {{
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: 11px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     text-align: right;
   }}
   .sd-empty {{
     padding: 14px;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
   }}
 </style>

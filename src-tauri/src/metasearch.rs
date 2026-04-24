@@ -122,7 +122,7 @@ body{{
   font-family:'JetBrains Mono',ui-monospace,Consolas,monospace;
   background:#0a0a0a;color:#d9e3ef;
   padding:24px;max-width:800px;margin:0 auto;
-  font-size:13px;line-height:1.55;
+  font-size: 14px;line-height:1.55;
 }}
 .hdr{{
   display:flex;align-items:baseline;gap:10px;
@@ -130,9 +130,9 @@ body{{
   border-bottom:1px solid #262626;
 }}
 .hdr .logo{{ height:22px; width:auto; display:block; transform:translateY(4px); -webkit-user-drag:none; user-select:none; }}
-.hdr h1{{ font-size:14px; font-weight:700; color:#d9e3ef; }}
+.hdr h1{{ font-size: 15px; font-weight:700; color:#d9e3ef; }}
 .hdr .q{{
-  color:#6b7a8e; font-size:11px; margin-left:auto;
+  color:#6b7a8e; font-size: 12px; margin-left:auto;
 }}
 .hdr .q::before{{ content:'q: '; color:#4a5363; }}
 ul{{ list-style:none; }}
@@ -144,23 +144,23 @@ ul{{ list-style:none; }}
 }}
 .r:hover{{ background:#141414; border-color:rgba(0,179,255,0.35); }}
 .r-t{{
-  color:#5de0ff; font-size:13px;
+  color:#5de0ff; font-size: 14px;
   text-decoration:none; font-weight:500;
 }}
 .r-t:hover{{ text-decoration:underline; }}
 .r-u{{
-  color:#4a5363; font-size:10px;
+  color:#4a5363; font-size: 11px;
   margin:2px 0 4px; word-break:break-all;
 }}
 .r-u::before{{ content:'> '; color:#6b7a8e; }}
-.r-s{{ color:#d9e3ef; font-size:12px; }}
+.r-s{{ color:#d9e3ef; font-size: 13px; }}
 .src{{
-  color:#4a5363; font-size:11px;
+  color:#4a5363; font-size: 12px;
   margin-top:18px; text-align:left;
 }}
 .src::before{{ content:'// '; color:#00b3ff; }}
 .empty{{
-  color:#6b7a8e; font-size:11px;
+  color:#6b7a8e; font-size: 12px;
   padding:28px 0; text-align:left;
 }}
 .empty::before{{ content:'// '; color:#00b3ff; }}

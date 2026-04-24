@@ -22,7 +22,7 @@
   font-family: var(--mono);
   color: var(--text);
   background: var(--bg);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -89,13 +89,13 @@ button {
   border-left: 2px solid transparent;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   cursor: pointer;
   transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
 }
 
 .sidebar-btn-icon {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: -1px;
   color: var(--text-muted);
   transition: color 120ms ease;
@@ -135,13 +135,13 @@ button {
   gap: 2px;
   border-top: 1px solid var(--border);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1;
   cursor: help;
 }
 
 .sidebar-status-dot {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
@@ -221,7 +221,7 @@ button {
   padding: 0 12px;
   height: 100%;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text);
   font-weight: 700;
 }
@@ -263,7 +263,7 @@ button {
   border-left: 1px solid var(--border);
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
@@ -374,7 +374,7 @@ button {
   width: auto;
   min-width: 42px;
   padding: 0 8px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -435,7 +435,7 @@ button {
   border: none;
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   cursor: pointer;
@@ -479,13 +479,13 @@ button {
   border: 1px solid var(--border-strong);
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   cursor: help;
   transition: color 120ms ease, border-color 120ms ease;
 }
 
 .block-counter-glyph {
-  font-size: 11px;
+  font-size: 12px;
   height: 6px;
 }
 
@@ -511,7 +511,7 @@ button {
   border: 1px solid var(--border-strong);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .trust-panel-header {
@@ -528,14 +528,14 @@ button {
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .trust-panel-close {
   background: transparent;
   color: var(--text-dim);
   border: none;
-  font-size: 14px;
+  font-size: 15px;
   cursor: pointer;
   padding: 0 4px;
 }
@@ -564,7 +564,7 @@ button {
 }
 
 .trust-score-label {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
 }
@@ -628,7 +628,7 @@ button {
   padding-top: 6px;
   border-top: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .url-input-wrap {
@@ -653,7 +653,7 @@ button {
   color: var(--text-dim);
   border: 1px solid var(--border-strong);
   border-radius: 0;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
   transition: color 120ms ease, border-color 120ms ease;
 }
@@ -676,7 +676,7 @@ button {
   border-radius: 0;
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   outline: none;
 }
 
@@ -691,7 +691,7 @@ button {
   transform: translateY(-50%);
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   pointer-events: none;
   white-space: pre;
 }
@@ -719,7 +719,7 @@ button {
   padding: 5px 10px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim);
   transition: background 80ms ease, color 80ms ease;
 }
@@ -735,7 +735,7 @@ button {
 
 .url-suggest-badge {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   min-width: 26px;
 }
 
@@ -745,7 +745,7 @@ button {
 
 .url-suggest-title {
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -757,7 +757,7 @@ button {
 
 .url-suggest-url {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -765,7 +765,7 @@ button {
 }
 
 .url-star {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .url-star:hover:not(:disabled) {
@@ -792,7 +792,7 @@ button {
   border-radius: 0;
   font-family: var(--mono);
   font-weight: 700;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
@@ -803,7 +803,7 @@ button {
 
 .url-error {
   grid-column: 1 / -1;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--danger);
 }
 
@@ -835,7 +835,7 @@ button {
   border-right: 1px solid var(--border);
   border-radius: 0;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: color 120ms ease, background 120ms ease;
 }
@@ -856,7 +856,7 @@ button {
 }
 
 .tab-spinner {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--accent);
   line-height: 1;
 }
@@ -878,7 +878,7 @@ button {
 }
 
 .tab-new-private {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: -1px;
   color: var(--warn);
 }
@@ -896,7 +896,7 @@ button {
   background: var(--bg-elev);
   border-top: 1px solid var(--border);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .find-bar-label {
@@ -911,7 +911,7 @@ button {
   border: 1px solid var(--border-strong);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   outline: none;
 }
 
@@ -929,7 +929,7 @@ button {
   color: var(--text-dim);
   border: 1px solid var(--border-strong);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: color 120ms ease, border-color 120ms ease;
 }
@@ -968,7 +968,7 @@ button {
   width: 14px;
   height: 14px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
   border-radius: 0;
 }
@@ -985,7 +985,7 @@ button {
   border: none;
   border-radius: 0;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
   align-self: center;
   margin-left: 4px;
 }
@@ -1007,7 +1007,7 @@ button {
 }
 
 .bookmarks-empty {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   padding: 2px 4px;
 }
@@ -1022,7 +1022,7 @@ button {
   border-radius: 0;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
   max-width: 180px;
@@ -1071,7 +1071,7 @@ button {
 }
 
 .bookmark-folder-icon {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-muted);
 }
 
@@ -1105,7 +1105,7 @@ button {
   color: var(--text-dim);
   border: none;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
@@ -1118,7 +1118,7 @@ button {
 
 .bookmark-folder-item-path {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   flex-shrink: 0;
 }
 
@@ -1143,7 +1143,7 @@ button {
   border: 1px solid var(--border-strong);
   border-radius: 0;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim);
   transition: color 120ms ease, border-color 120ms ease;
 }
@@ -1187,19 +1187,19 @@ button {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text);
 }
 
 .meta-toggle strong {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--accent);
   font-weight: 700;
 }
 
 .meta-toggle small {
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .pi-section {
@@ -1207,14 +1207,14 @@ button {
 }
 
 .pi-section-title {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
   margin-bottom: 4px;
 }
 
 .pi-empty {
   padding: 10px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   text-align: left;
 }
@@ -1238,7 +1238,7 @@ button {
   padding: 5px 10px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   transition: background 120ms ease, color 120ms ease;
 }
 
@@ -1264,7 +1264,7 @@ button {
 
 .pi-url {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1272,7 +1272,7 @@ button {
 
 .pi-meta {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .pi-folder {
@@ -1290,7 +1290,7 @@ button {
   border: none;
   border-bottom: 1px solid var(--border);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   text-align: left;
   transition: color 120ms ease;
@@ -1302,7 +1302,7 @@ button {
 
 .pi-folder-caret {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   min-width: 10px;
 }
 
@@ -1319,7 +1319,7 @@ button {
 
 .pi-folder-count {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .pi-bookmark-row {
@@ -1333,7 +1333,7 @@ button {
   border: 1px solid var(--border);
   border-radius: 0;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   cursor: pointer;
   transition: color 120ms ease, border-color 120ms ease;
 }
@@ -1368,14 +1368,14 @@ button {
 }
 
 .pi-modal-title {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--accent);
   font-weight: 600;
   text-transform: lowercase;
 }
 
 .pi-modal-subtitle {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1402,7 +1402,7 @@ button {
   color: var(--text);
   border: none;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   text-align: left;
 }
@@ -1418,7 +1418,7 @@ button {
 
 .pi-modal-option-current {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .pi-modal-new {
@@ -1428,7 +1428,7 @@ button {
 }
 
 .pi-modal-new label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
@@ -1485,14 +1485,14 @@ button {
   border: none;
   border-radius: 0;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: color 120ms ease;
 }
 
 .nav-btn-icon {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: -1px;
   transition: color 120ms ease;
 }
@@ -1520,7 +1520,7 @@ button {
   border: 1px solid var(--danger);
   border-radius: 0;
   color: var(--danger);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .error-banner::before {
@@ -1534,13 +1534,13 @@ button {
   gap: 8px;
   font-family: var(--mono);
   font-weight: 700;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text);
 }
 
 .brand::after {
   content: 'v0.1';
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   margin-left: 4px;
   font-weight: 400;
@@ -1553,14 +1553,14 @@ button {
   width: 14px;
   height: 16px;
   color: var(--accent);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
   font-family: var(--mono);
 }
 
 .status-pill {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   padding: 3px 8px;
   border-radius: 0;
   border: 1px solid var(--border-strong);
@@ -1584,7 +1584,7 @@ button {
   color: var(--text-dim);
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .system-line .kv .k {
@@ -1618,7 +1618,7 @@ button {
   justify-content: space-between;
   align-items: baseline;
   margin-bottom: 4px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
 }
 
@@ -1651,7 +1651,7 @@ button {
 }
 
 .top-blocked-header {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--accent);
   margin-bottom: 8px;
   padding-bottom: 6px;
@@ -1660,7 +1660,7 @@ button {
 }
 
 .top-blocked-empty {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   padding: 6px 0;
 }
@@ -1677,7 +1677,7 @@ button {
   gap: 10px;
   align-items: center;
   padding: 3px 0;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .tb-host {
@@ -1707,7 +1707,7 @@ button {
   flex-wrap: wrap;
   gap: 4px 16px;
   align-items: baseline;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
   border-top: 1px dashed var(--border-strong);
 }
@@ -1725,7 +1725,7 @@ button {
 
 .shortcuts-hint kbd {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--accent);
   background: transparent;
   border: 1px solid var(--border-strong);
@@ -1775,7 +1775,7 @@ button {
   border: 1px solid var(--border-strong);
   border-radius: 0;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   cursor: pointer;
   transition: color 120ms ease, border-color 120ms ease;
 }
@@ -1810,7 +1810,7 @@ button {
 
 .debug-empty {
   padding: 18px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -1827,7 +1827,7 @@ button {
   padding: 3px 10px;
   border-bottom: 1px solid var(--border);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -1917,7 +1917,7 @@ button {
 
   .debug-target {
     grid-area: target;
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .debug-msg {
@@ -1940,7 +1940,7 @@ button {
 }
 
 .card .label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
 }
 
@@ -1956,7 +1956,7 @@ button {
 }
 
 .card .sub {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   margin-top: 2px;
 }
@@ -1977,7 +1977,7 @@ button {
   border-radius: 0;
   font-family: var(--mono);
   font-weight: 700;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: background 120ms ease;
 }
@@ -1999,7 +1999,7 @@ button {
   border-radius: 0;
   font-family: var(--mono);
   font-weight: 500;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: color 120ms ease, border-color 120ms ease;
 }
@@ -2020,7 +2020,7 @@ button {
   border: none;
   padding: 2px 6px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: color 120ms ease;
 }
@@ -2036,14 +2036,14 @@ button {
 
 .error {
   color: var(--danger);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .footer {
   padding: 10px 16px;
   border-top: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   text-align: center;
 }
 
@@ -2081,14 +2081,14 @@ button {
 .modal-lead {
   color: var(--text-dim);
   margin: 0 0 14px 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.55;
 }
 
 .callout {
   padding: 8px 10px;
   border-radius: 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.55;
   margin: 0 0 14px 0;
 }
@@ -2101,12 +2101,12 @@ button {
 
 .callout-warn strong {
   color: var(--warn);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .modal .mono {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   word-break: break-all;
   color: var(--accent);
   background: transparent;
@@ -2132,7 +2132,7 @@ button {
 .modal-hint {
   margin-top: 10px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .settings {
@@ -2173,13 +2173,13 @@ button {
 .panel-header h3 {
   margin: 0;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--accent);
 }
 
 .panel-note {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim);
   margin-bottom: 8px;
   line-height: 1.55;
@@ -2195,7 +2195,7 @@ button {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .settings-table th,
@@ -2208,7 +2208,7 @@ button {
 .settings-table th {
   font-weight: 700;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .settings-table td.mono {
@@ -2224,7 +2224,7 @@ button {
 
 .trust-badge {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   padding: 3px 8px;
   border-radius: 0;
@@ -2271,7 +2271,7 @@ button {
 .block-log-header h3 {
   margin: 0;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--accent);
 }
@@ -2282,7 +2282,7 @@ button {
 }
 
 .block-log-empty {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   padding: 10px 0;
   text-align: left;
@@ -2305,7 +2305,7 @@ button {
   gap: 10px;
   padding: 4px 10px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -2413,7 +2413,7 @@ button {
   border: 1px solid var(--border-strong);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 14px;
   outline: none;
   transition: border-color 120ms ease;
   min-width: 0;
@@ -2424,7 +2424,7 @@ button {
 }
 
 .mobile-trust {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   min-width: 46px;
@@ -2432,7 +2432,7 @@ button {
 
 .mobile-tabs {
   position: relative;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -2443,7 +2443,7 @@ button {
   padding: 2px 6px;
   border: 1px solid currentColor;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.1;
 }
 
@@ -2466,7 +2466,7 @@ button {
   flex-direction: column;
   gap: 2px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .mobile-menu-right {
@@ -2485,7 +2485,7 @@ button {
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   transition: color 120ms ease, background 120ms ease;
 }
 
@@ -2506,7 +2506,7 @@ button {
 }
 
 .mobile-menu-icon {
-  font-size: 12px;
+  font-size: 13px;
   width: 22px;
   text-align: center;
 }
@@ -2525,21 +2525,21 @@ button {
   margin-top: 4px;
   border-top: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.5px;
 }
 
 .mobile-menu-status-text {
   color: var(--text-muted);
   margin-left: auto;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .mobile-chrome-error {
   padding: 6px 10px;
   background: var(--danger);
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 /* Titlebar in mobile mode collapses to a 30px drag strip + window
@@ -2572,7 +2572,7 @@ button {
 
 .tab-switcher-title {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-dim);
   letter-spacing: 0.5px;
 }
@@ -2643,7 +2643,7 @@ button {
 
 .tab-card-title {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -2657,7 +2657,7 @@ button {
   border: none;
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: 15px;
   cursor: pointer;
   line-height: 1;
 }
@@ -2668,7 +2668,7 @@ button {
 
 .tab-card-url {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -2681,7 +2681,7 @@ button {
   margin-right: 4px;
   background: var(--warn);
   color: #1a1000;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
 }
@@ -2726,7 +2726,7 @@ html:has(.menu-popup-body) {
   border: 1px solid var(--border-strong);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   padding: 4px;
   display: flex;
   flex-direction: column;
@@ -2747,7 +2747,7 @@ html:has(.menu-popup-body) {
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   transition: color 120ms ease, background 120ms ease;
 }
 
@@ -2767,7 +2767,7 @@ html:has(.menu-popup-body) {
 }
 
 .menu-popup-icon {
-  font-size: 12px;
+  font-size: 13px;
   text-align: center;
   justify-self: center;
   min-width: 0;
@@ -2791,7 +2791,7 @@ html:has(.menu-popup-body) {
 .context-menu-empty,
 .context-menu-error {
   padding: 12px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   font-family: var(--mono);
 }
@@ -2806,7 +2806,7 @@ html:has(.menu-popup-body) {
      shares the same icon column. */
   .context-menu .menu-popup-item {
     padding: 12px 14px;
-    font-size: 13px;
+    font-size: 14px;
   }
 }
 
@@ -2818,14 +2818,14 @@ html:has(.menu-popup-body) {
   margin-top: auto;
   border-top: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.5px;
 }
 
 .menu-popup-status-text {
   color: var(--text-muted);
   margin-left: auto;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 /* ───── Bookmarks page ─────────────────────────────────────────── */
@@ -2852,7 +2852,7 @@ html:has(.menu-popup-body) {
 .bookmarks-page-count {
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .bookmarks-breadcrumb {
@@ -2874,7 +2874,7 @@ html:has(.menu-popup-body) {
   border: none;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   padding: 4px 6px;
   cursor: pointer;
   transition: color 120ms ease;
@@ -2891,7 +2891,7 @@ html:has(.menu-popup-body) {
 .bookmarks-crumb-sep {
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .bookmarks-crumb-actions {
@@ -2902,7 +2902,7 @@ html:has(.menu-popup-body) {
 
 .bookmarks-page-section-title {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   padding: 6px 0;
 }
@@ -2911,7 +2911,7 @@ html:has(.menu-popup-body) {
   padding: 24px 8px;
   text-align: center;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -2936,7 +2936,7 @@ html:has(.menu-popup-body) {
   border: none;
   border-bottom: 1px solid var(--border);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 14px;
   text-align: left;
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
@@ -2949,7 +2949,7 @@ html:has(.menu-popup-body) {
 
 .bookmarks-page-folder-icon {
   color: var(--accent);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .bookmarks-page-folder-name {
@@ -2961,7 +2961,7 @@ html:has(.menu-popup-body) {
 
 .bookmarks-page-folder-count {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .bookmarks-page-row {
@@ -2985,7 +2985,7 @@ html:has(.menu-popup-body) {
   color: var(--text);
   border: none;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
@@ -2999,7 +2999,7 @@ html:has(.menu-popup-body) {
 .bookmarks-page-row-star {
   color: var(--accent);
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 12px;
   padding-top: 2px;
 }
 
@@ -3024,7 +3024,7 @@ html:has(.menu-popup-body) {
 
 .bookmarks-page-row-url {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3089,7 +3089,7 @@ html:has(.menu-popup-body) {
   padding: 24px 8px;
   text-align: center;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -3115,7 +3115,7 @@ html:has(.menu-popup-body) {
 }
 
 .metric-card-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -3129,14 +3129,14 @@ html:has(.menu-popup-body) {
 }
 
 .metric-card-sub {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
 }
 
 .metric-card-spark {
   margin-top: 4px;
   color: var(--accent);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1;
   letter-spacing: 0;
   overflow: hidden;
@@ -3188,7 +3188,7 @@ html:has(.menu-popup-body) {
   padding: 24px 8px;
   text-align: center;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -3228,7 +3228,7 @@ html:has(.menu-popup-body) {
 
 .download-row-title {
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3237,7 +3237,7 @@ html:has(.menu-popup-body) {
 
 .download-row-meta {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .download-row-path {
@@ -3246,7 +3246,7 @@ html:has(.menu-popup-body) {
 
 .download-row-url {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
