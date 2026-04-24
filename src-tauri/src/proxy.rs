@@ -380,6 +380,9 @@ impl BlueFlameHandler {
     /// requests return `false` so the caller can respond with 403.
     async fn handle_context_sentinel(&self, req: Request<Body>) -> bool {
         use http_body_util::BodyExt;
+        let method = req.method().clone();
+        let uri = req.uri().clone();
+        tracing::debug!(%method, %uri, "sentinel request arrived");
         // Params live in the POST body (form-urlencoded). We used to
         // put them in the query string, but page URLs + selected
         // text pushed us past hyper's 4 KB URI cap on long-link
@@ -391,7 +394,10 @@ impl BlueFlameHandler {
         let (_parts, body) = req.into_parts();
         let body_bytes = match body.collect().await {
             Ok(b) => b.to_bytes(),
-            Err(_) => return false,
+            Err(e) => {
+                tracing::warn!(error = %e, "sentinel body collect failed");
+                return false;
+            }
         };
         let mut pairs: std::collections::HashMap<String, String> =
             url::form_urlencoded::parse(&body_bytes)
@@ -402,13 +408,23 @@ impl BlueFlameHandler {
                 pairs = url::form_urlencoded::parse(q).into_owned().collect();
             }
         }
+        tracing::debug!(
+            body_bytes = body_bytes.len(),
+            param_count = pairs.len(),
+            has_token = pairs.contains_key("token"),
+            "sentinel params parsed",
+        );
 
         let provided = match pairs.get("token") {
             Some(t) => t.as_str(),
-            None => return false,
+            None => {
+                tracing::warn!("sentinel request missing token - rejecting");
+                return false;
+            }
         };
         let expected: &str = &self.context_token;
         if provided.len() != expected.len() {
+            tracing::warn!("sentinel token length mismatch - rejecting");
             return false;
         }
         // Constant-time compare.
@@ -417,6 +433,7 @@ impl BlueFlameHandler {
             diff |= a ^ b;
         }
         if diff != 0 {
+            tracing::warn!("sentinel token mismatch - rejecting");
             return false;
         }
 
