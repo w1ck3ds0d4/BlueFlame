@@ -97,6 +97,12 @@ pub enum ContextMenuRequest {
         key: String,
         shift: bool,
     },
+    /// Middle-click on a link. Opens `url` in a new BlueFlame tab.
+    /// Matches Chrome/Firefox convention - desktop only; mobile has
+    /// no middle button.
+    OpenInNewTab {
+        url: String,
+    },
 }
 
 /// Per-launch auth token embedded into the init script. The proxy

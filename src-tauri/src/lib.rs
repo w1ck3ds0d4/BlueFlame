@@ -178,6 +178,15 @@ pub fn run() {
                                 serde_json::json!({ "key": key, "shift": shift }),
                             );
                         }
+                        context_menu::ContextMenuRequest::OpenInNewTab { url } => {
+                            let tabs_state = consumer_handle.state::<browser::Tabs>();
+                            if let Err(e) =
+                                browser::browser_open_tab(consumer_handle.clone(), tabs_state, url)
+                                    .await
+                            {
+                                tracing::warn!(error = %e, "middle-click open_tab failed");
+                            }
+                        }
                     }
                 }
             });

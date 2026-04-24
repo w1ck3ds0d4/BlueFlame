@@ -383,6 +383,12 @@ impl BlueFlameHandler {
                 return false;
             }
             crate::context_menu::ContextMenuRequest::KeyboardShortcut { key, shift }
+        } else if pairs.get("action").map(|s| s.as_str()) == Some("middleclick") {
+            let url = pairs.get("url").cloned().unwrap_or_default();
+            if url.is_empty() {
+                return false;
+            }
+            crate::context_menu::ContextMenuRequest::OpenInNewTab { url }
         } else {
             let x: f64 = pairs.get("x").and_then(|s| s.parse().ok()).unwrap_or(0.0);
             let y: f64 = pairs.get("y").and_then(|s| s.parse().ok()).unwrap_or(0.0);

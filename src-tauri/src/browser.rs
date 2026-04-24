@@ -163,6 +163,27 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
             menuOpen = true;
         } catch (_) { /* ignore */ }
     }, true);
+
+    // Middle-click on a link → open in a new BlueFlame tab. auxclick
+    // fires for mouse buttons other than left; button === 1 is middle.
+    // preventDefault stops the webview from opening a new popup window
+    // (which wouldn't be integrated with our tab system). The actual
+    // open is dispatched through the same sentinel channel.
+    window.addEventListener("auxclick", function (e) {
+        if (e.button !== 1) return;
+        var link = climbForLink(e.target);
+        if (!link || !link.href) return;
+        try {
+            e.preventDefault();
+            var qs = new URLSearchParams();
+            qs.set("token", BF_TOKEN);
+            qs.set("action", "middleclick");
+            qs.set("url", link.href);
+            var url = SENTINEL + "?" + qs.toString();
+            if (navigator.sendBeacon) navigator.sendBeacon(url);
+            else fetch(url, { method: "POST", keepalive: true }).catch(function () {});
+        } catch (_) { /* ignore */ }
+    }, true);
     window.addEventListener("click", dismissSentinel, true);
 
     // Relay Ctrl/Meta keyboard shortcuts the React shell already
