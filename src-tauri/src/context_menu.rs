@@ -82,11 +82,21 @@ impl ContextStore {
 
 pub type SharedContextStore = std::sync::Arc<ContextStore>;
 
-/// One request from proxy → consumer task. Either a fresh open (with
-/// payload) or a dismiss (user clicked/escape'd after a previous open).
+/// One request from proxy → consumer task. The `KeyboardShortcut`
+/// variant is the tab-webview-side keyboard relay: the init script
+/// intercepts `Ctrl+…` shortcuts the shell already handles (T/W/L/F/
+/// R/…) and forwards them so App.tsx's existing dispatcher can run,
+/// even when the user is focused inside a page's content.
 pub enum ContextMenuRequest {
     Open(ContextMenuPayload),
     Dismiss,
+    /// `key` is the lowercase form of `KeyboardEvent.key`; `shift`
+    /// is whether the shift modifier was held. Ctrl/meta are assumed
+    /// (the init script only sends events where one was held).
+    KeyboardShortcut {
+        key: String,
+        shift: bool,
+    },
 }
 
 /// Per-launch auth token embedded into the init script. The proxy

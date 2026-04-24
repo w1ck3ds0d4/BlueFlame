@@ -164,8 +164,34 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
         } catch (_) { /* ignore */ }
     }, true);
     window.addEventListener("click", dismissSentinel, true);
+
+    // Relay Ctrl/Meta keyboard shortcuts the React shell already
+    // handles (T/W/L/F/R/D/,/Tab/1-9) so they fire even when a tab
+    // webview has focus. Without this, Ctrl+T inside youtube.com goes
+    // to youtube's capture (or nowhere) instead of opening a BlueFlame
+    // tab. We preventDefault + sendBeacon here; the proxy maps action=
+    // kbd to a Tauri event that App.tsx picks up.
+    var SHORTCUT_KEYS = new Set([
+        "l", "t", "w", "r", "f", "d", ",", "tab",
+        "1", "2", "3", "4", "5", "6", "7", "8", "9",
+    ]);
     window.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") dismissSentinel();
+        if (e.key === "Escape") { dismissSentinel(); return; }
+        if (!(e.ctrlKey || e.metaKey)) return;
+        var k = (e.key || "").toLowerCase();
+        if (!SHORTCUT_KEYS.has(k)) return;
+        try {
+            e.preventDefault();
+            e.stopPropagation();
+            var qs = new URLSearchParams();
+            qs.set("token", BF_TOKEN);
+            qs.set("action", "kbd");
+            qs.set("key", k);
+            qs.set("shift", e.shiftKey ? "1" : "0");
+            var url = SENTINEL + "?" + qs.toString();
+            if (navigator.sendBeacon) navigator.sendBeacon(url);
+            else fetch(url, { method: "POST", keepalive: true }).catch(function () {});
+        } catch (_) { /* ignore */ }
     }, true);
 
     // iOS/Android long-press: contextmenu is often suppressed by the

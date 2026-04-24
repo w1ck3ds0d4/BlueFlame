@@ -315,57 +315,69 @@ export default function App() {
       }
     }
 
-    function onKeyDown(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      const k = e.key.toLowerCase();
-
+    // Central dispatcher for Ctrl/Meta shortcuts. Called from two places:
+    //   (a) window.keydown - when focus is in the React shell
+    //   (b) blueflame:tab-shortcut Tauri event - relayed up from the
+    //       tab webview's init script when focus is inside the page.
+    // Both paths call this with the same {key, shift} shape.
+    function runShortcut(k: string, shift: boolean) {
       if (k === 'l') {
-        e.preventDefault();
         window.dispatchEvent(new CustomEvent('blueflame:focus-url'));
       } else if (k === 't') {
-        e.preventDefault();
-        if (e.shiftKey) {
-          onNewPrivateTab().then(showBrowser);
-        } else {
-          onNewTab().then(showBrowser);
-        }
+        if (shift) onNewPrivateTab().then(showBrowser);
+        else onNewTab().then(showBrowser);
       } else if (k === 'w') {
-        if (activeId !== null) {
-          e.preventDefault();
-          onCloseTab(activeId);
-        }
+        if (activeId !== null) onCloseTab(activeId);
       } else if (k === 'r') {
-        e.preventDefault();
         invoke('browser_reload').catch(() => undefined);
       } else if (k === 'f') {
-        e.preventDefault();
         setFindBarOpen(true);
       } else if (k === 'd') {
-        e.preventDefault();
-        if (e.shiftKey) {
+        if (shift) {
           setView('dashboard');
           goHome();
         } else {
           toggleActiveBookmark();
         }
       } else if (k === ',') {
-        e.preventDefault();
         setView('settings');
         goHome();
       } else if (k === 'tab') {
-        e.preventDefault();
-        cycleTab(e.shiftKey ? -1 : 1);
+        cycleTab(shift ? -1 : 1);
       } else if (/^[1-9]$/.test(k)) {
         const idx = parseInt(k, 10) - 1;
-        if (tabs[idx]) {
-          e.preventDefault();
-          onSelectTab(tabs[idx].id).then(showBrowser);
-        }
+        if (tabs[idx]) onSelectTab(tabs[idx].id).then(showBrowser);
       }
     }
 
+    function onKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      // Keys we know how to handle - preventDefault only for those so
+      // we don't swallow native Ctrl+C / Ctrl+V / etc. that we don't
+      // implement here.
+      const handled = new Set([
+        'l', 't', 'w', 'r', 'f', 'd', ',', 'tab',
+        '1', '2', '3', '4', '5', '6', '7', '8', '9',
+      ]);
+      if (!handled.has(k)) return;
+      e.preventDefault();
+      runShortcut(k, e.shiftKey);
+    }
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    let unlistenTab: UnlistenFn | undefined;
+    listen<{ key: string; shift: boolean }>('blueflame:tab-shortcut', (e) => {
+      runShortcut(e.payload.key, e.payload.shift);
+    })
+      .then((fn) => {
+        unlistenTab = fn;
+      })
+      .catch(() => undefined);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      unlistenTab?.();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, activeId, activeTab]);
 

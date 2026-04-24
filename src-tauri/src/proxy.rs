@@ -376,6 +376,13 @@ impl BlueFlameHandler {
 
         let request = if pairs.get("dismiss").map(|s| s.as_str()) == Some("1") {
             crate::context_menu::ContextMenuRequest::Dismiss
+        } else if pairs.get("action").map(|s| s.as_str()) == Some("kbd") {
+            let key = pairs.get("key").cloned().unwrap_or_default();
+            let shift = pairs.get("shift").map(|s| s.as_str()) == Some("1");
+            if key.is_empty() {
+                return false;
+            }
+            crate::context_menu::ContextMenuRequest::KeyboardShortcut { key, shift }
         } else {
             let x: f64 = pairs.get("x").and_then(|s| s.parse().ok()).unwrap_or(0.0);
             let y: f64 = pairs.get("y").and_then(|s| s.parse().ok()).unwrap_or(0.0);

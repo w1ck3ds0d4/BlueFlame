@@ -28,7 +28,7 @@ mod util;
 
 use std::sync::Arc;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
 use browser::{
@@ -166,6 +166,17 @@ pub fn run() {
                             {
                                 let _ = wv.close();
                             }
+                        }
+                        context_menu::ContextMenuRequest::KeyboardShortcut { key, shift } => {
+                            // Relay the tab-focused shortcut up to the
+                            // React shell, where the same dispatcher
+                            // that handles window-level Ctrl+... already
+                            // lives. Event payload is JSON so App.tsx
+                            // doesn't have to parse a delimited string.
+                            let _ = consumer_handle.emit(
+                                "blueflame:tab-shortcut",
+                                serde_json::json!({ "key": key, "shift": shift }),
+                            );
                         }
                     }
                 }
