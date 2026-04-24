@@ -969,6 +969,24 @@ pub fn browser_reload(app: tauri::AppHandle, tabs: tauri::State<'_, Tabs>) -> Re
     eval_on_active(&app, &tabs, "location.reload()")
 }
 
+/// Open native DevTools on the active tab's webview. Wired into the
+/// "Inspect" item on the right-click context menu so the user can
+/// poke at pages the same way they would in Chrome/Firefox. The
+/// `devtools` Cargo feature on `tauri` gates this in release builds.
+#[tauri::command]
+pub fn browser_open_devtools(
+    app: tauri::AppHandle,
+    tabs: tauri::State<'_, Tabs>,
+) -> Result<(), String> {
+    let s = tabs.lock().map_err(|e| format!("lock tabs: {e}"))?;
+    let id = s.active_id.ok_or_else(|| "no active tab".to_string())?;
+    let wv = app
+        .get_webview(&tab_label(id))
+        .ok_or_else(|| "active tab webview missing".to_string())?;
+    wv.open_devtools();
+    Ok(())
+}
+
 /// Trigger an in-page text search on the active tab. Uses `window.find`,
 /// which highlights the match inside the webview and wraps automatically.
 /// `forward = false` searches backward (e.g., Shift+Enter in the find bar).

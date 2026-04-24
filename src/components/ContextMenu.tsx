@@ -1,5 +1,21 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ComponentType } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Copy,
+  ExternalLink,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  RotateCw,
+  Search,
+  Shield,
+  Star,
+  Wrench,
+} from 'lucide-react';
+
+type LucideIcon = ComponentType<{ size?: number; strokeWidth?: number }>;
 
 /** Mirrors Rust `ContextMenuPayload`. */
 interface Payload {
@@ -31,7 +47,6 @@ export function ContextMenu() {
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // Dark-webview backing like the other popups (see MenuPopup).
   useEffect(() => {
     document.body.classList.add('menu-popup-body');
     return () => document.body.classList.remove('menu-popup-body');
@@ -47,9 +62,6 @@ export function ContextMenu() {
       .catch((e) => setError(String(e)));
   }, [ctxId]);
 
-  // After mount, ask Rust to shrink the webview to our rendered height
-  // so there's no empty space below the menu items. Re-measure on
-  // payload change because the item count varies by target type.
   useLayoutEffect(() => {
     const el = rootRef.current;
     if (!el) return;
@@ -84,7 +96,6 @@ export function ContextMenu() {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
       } else {
-        // Fallback path for webviews without the async clipboard API.
         const ta = document.createElement('textarea');
         ta.value = text;
         document.body.appendChild(ta);
@@ -103,7 +114,7 @@ export function ContextMenu() {
     try {
       await invoke('bookmark_toggle', {
         url: payload.page_url,
-        title: '', // title unknown from the popup; toggle uses url as key
+        title: '',
       });
     } catch (e) {
       setError(String(e));
@@ -114,6 +125,15 @@ export function ContextMenu() {
   async function navCmd(cmd: 'browser_back' | 'browser_forward' | 'browser_reload') {
     try {
       await invoke(cmd);
+    } catch (e) {
+      setError(String(e));
+    }
+    await close();
+  }
+
+  async function openDevtools() {
+    try {
+      await invoke('browser_open_devtools');
     } catch (e) {
       setError(String(e));
     }
@@ -138,50 +158,63 @@ export function ContextMenu() {
   const hasLink = !!payload.link_url;
   const hasImage = !!payload.image_url;
   const hasSelection = !!payload.selection_text;
+  // Trim + cap selection so the menu label doesn't stretch wide on
+  // multi-line copies. 24 chars + ellipsis fits the 240px popup.
+  const selectionPreview = hasSelection
+    ? truncate(payload.selection_text!.replace(/\s+/g, ' ').trim(), 24)
+    : '';
 
   return (
     <div className="menu-popup context-menu" role="menu" ref={rootRef}>
       {hasLink && (
         <>
-          <Item icon="+" label="open link in new tab" onClick={() => openTab(payload.link_url!, false)} />
-          <Item icon="+P" label="open in private tab" onClick={() => openTab(payload.link_url!, true)} />
-          <Item icon="⎘" label="copy link" onClick={() => copy(payload.link_url!)} />
+          <Item Icon={ExternalLink} label="open link in new tab" onClick={() => openTab(payload.link_url!, false)} />
+          <Item Icon={Shield} label="open in private tab" onClick={() => openTab(payload.link_url!, true)} />
+          <Item Icon={LinkIcon} label="copy link" onClick={() => copy(payload.link_url!)} />
           <Divider />
         </>
       )}
       {hasImage && (
         <>
-          <Item icon="⎘" label="copy image url" onClick={() => copy(payload.image_url!)} />
-          <Item icon="+" label="open image in new tab" onClick={() => openTab(payload.image_url!, false)} />
+          <Item Icon={ImageIcon} label="copy image url" onClick={() => copy(payload.image_url!)} />
+          <Item Icon={ExternalLink} label="open image in new tab" onClick={() => openTab(payload.image_url!, false)} />
           <Divider />
         </>
       )}
       {hasSelection && (
         <>
-          <Item icon="⎘" label="copy" onClick={() => copy(payload.selection_text!)} />
+          <Item Icon={Copy} label="copy" onClick={() => copy(payload.selection_text!)} />
+          <Item
+            Icon={Search}
+            label={`search for "${selectionPreview}"`}
+            onClick={() => openTab(payload.selection_text!, false)}
+          />
           <Divider />
         </>
       )}
-      <Item icon="←" label="back" onClick={() => navCmd('browser_back')} />
-      <Item icon="→" label="forward" onClick={() => navCmd('browser_forward')} />
-      <Item icon="⟳" label="reload" onClick={() => navCmd('browser_reload')} />
+      <Item Icon={ArrowLeft} label="back" onClick={() => navCmd('browser_back')} />
+      <Item Icon={ArrowRight} label="forward" onClick={() => navCmd('browser_forward')} />
+      <Item Icon={RotateCw} label="reload" onClick={() => navCmd('browser_reload')} />
       <Divider />
-      <Item icon="★" label="bookmark page" onClick={bookmarkPage} />
+      <Item Icon={LinkIcon} label="copy page url" onClick={() => copy(payload.page_url)} />
+      <Item Icon={Star} label="bookmark page" onClick={bookmarkPage} />
+      <Divider />
+      <Item Icon={Wrench} label="inspect" onClick={openDevtools} />
     </div>
   );
 }
 
 interface ItemProps {
-  icon: string;
+  Icon: LucideIcon;
   label: string;
   onClick: () => void;
 }
 
-function Item({ icon, label, onClick }: ItemProps) {
+function Item({ Icon, label, onClick }: ItemProps) {
   return (
     <button role="menuitem" className="menu-popup-item" onClick={onClick}>
       <span className="menu-popup-icon" aria-hidden>
-        {icon}
+        <Icon size={14} strokeWidth={1.75} />
       </span>
       <span>{label}</span>
     </button>
@@ -190,4 +223,8 @@ function Item({ icon, label, onClick }: ItemProps) {
 
 function Divider() {
   return <div className="menu-popup-divider" aria-hidden />;
+}
+
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : s.slice(0, n - 1) + '…';
 }

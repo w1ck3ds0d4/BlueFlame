@@ -35,9 +35,9 @@ use tokio::sync::Mutex;
 use browser::{
     browser_back, browser_close_tab, browser_find_clear, browser_find_in_page, browser_forward,
     browser_hide_all, browser_list_tabs, browser_navigate_active, browser_new_private_tab,
-    browser_new_tab, browser_open_tab, browser_reload, browser_show_active, browser_switch_tab,
-    close_all_popups, close_menu_popup, close_trust_panel, open_menu_popup, open_trust_panel,
-    resize_menu_popup, Tabs,
+    browser_new_tab, browser_open_devtools, browser_open_tab, browser_reload, browser_show_active,
+    browser_switch_tab, close_all_popups, close_menu_popup, close_trust_panel, open_menu_popup,
+    open_trust_panel, resize_menu_popup, Tabs,
 };
 use commands::{
     bookmark_delete_folder, bookmark_folders, bookmark_is, bookmark_list, bookmark_rename_folder,
@@ -252,6 +252,7 @@ pub fn run() {
             browser_back,
             browser_forward,
             browser_reload,
+            browser_open_devtools,
             browser_hide_all,
             browser_show_active,
             get_search_engine,
