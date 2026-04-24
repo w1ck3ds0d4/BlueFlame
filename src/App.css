@@ -2703,6 +2703,18 @@ button {
    suspenders: make the body dark in case of any sizing slop. */
 .menu-popup-body {
   background: var(--bg-elev);
+  /* The webview gets resized to the measured content height via
+     resize_menu_popup, but sub-pixel rounding between
+     getBoundingClientRect() and the Rust LogicalSize leaks a default
+     vertical scrollbar when more items fit (e.g. adding `bkm` pushed
+     the total just past the threshold). Since the popup is sized to
+     fit, scrolling should never be needed here. */
+  margin: 0;
+  overflow: hidden;
+}
+
+html:has(.menu-popup-body) {
+  overflow: hidden;
 }
 
 .menu-popup {
@@ -2781,4 +2793,235 @@ button {
   color: var(--text-muted);
   margin-left: auto;
   font-size: 10px;
+}
+
+/* ───── Bookmarks page ─────────────────────────────────────────── */
+
+.bookmarks-page {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.bookmarks-page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bookmarks-page-count {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.bookmarks-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.bookmarks-crumb-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.bookmarks-crumb {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 4px 6px;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.bookmarks-crumb:hover {
+  color: var(--accent);
+}
+
+.bookmarks-crumb.current {
+  color: var(--accent);
+}
+
+.bookmarks-crumb-sep {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.bookmarks-crumb-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.bookmarks-page-section-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 6px 0;
+}
+
+.bookmarks-page-empty {
+  padding: 24px 8px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.bookmarks-page-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 200px;
+  border: 1px solid var(--border);
+}
+
+.bookmarks-page-folder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.bookmarks-page-folder:hover {
+  background: var(--bg);
+  color: var(--accent);
+}
+
+.bookmarks-page-folder-icon {
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.bookmarks-page-folder-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmarks-page-folder-count {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.bookmarks-page-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+}
+
+.bookmarks-page-row:last-child {
+  border-bottom: none;
+}
+
+.bookmarks-page-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.bookmarks-page-row-main:hover {
+  background: var(--bg);
+  color: var(--accent);
+}
+
+.bookmarks-page-row-star {
+  color: var(--accent);
+  flex-shrink: 0;
+  font-size: 11px;
+  padding-top: 2px;
+}
+
+.bookmarks-page-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.bookmarks-page-row-title {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmarks-page-row-main:hover .bookmarks-page-row-title {
+  color: var(--accent-bright);
+}
+
+.bookmarks-page-row-url {
+  color: var(--text-dim);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmarks-page-row-folder {
+  color: var(--text-muted);
+}
+
+.bookmarks-page-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .bookmarks-page {
+    padding: 12px;
+  }
+  .bookmarks-page-row {
+    flex-direction: column;
+  }
+  .bookmarks-page-row-actions {
+    padding: 6px 12px 10px;
+    justify-content: flex-end;
+  }
+  .bookmarks-crumb-actions {
+    margin-left: 0;
+    width: 100%;
+  }
 }

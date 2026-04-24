@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
 
-type View = 'dashboard' | 'settings' | 'debug';
+type View = 'dashboard' | 'bookmarks' | 'settings' | 'debug';
 
 type StatusKind = 'on' | 'off' | 'starting' | 'booting' | 'failed';
 
@@ -125,6 +125,7 @@ export function MenuPopup() {
   if (kind === 'hamburger') {
     const items: { id: View; icon: string; label: string }[] = [
       { id: 'dashboard', icon: '▮▮▮', label: 'dash' },
+      { id: 'bookmarks', icon: '★', label: 'bkm' },
       { id: 'settings', icon: '[=]', label: 'set' },
       { id: 'debug', icon: '>_', label: 'dbg' },
     ];
@@ -204,6 +205,16 @@ export function MenuPopup() {
           {bookmarked ? '★' : '☆'}
         </span>
         <span>{bookmarked ? 'remove bookmark' : 'add bookmark'}</span>
+      </button>
+      <button
+        role="menuitem"
+        className="menu-popup-item"
+        onClick={() => pickView('bookmarks')}
+      >
+        <span className="menu-popup-icon" aria-hidden>
+          ☰
+        </span>
+        <span>all bookmarks</span>
       </button>
       <div className="menu-popup-divider" aria-hidden />
       <button role="menuitem" className="menu-popup-item" onClick={() => openNewTab(false)}>

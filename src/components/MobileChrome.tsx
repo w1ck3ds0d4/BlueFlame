@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { TrustAssessment } from './TrustPopup';
 
-type View = 'dashboard' | 'settings' | 'debug';
+type View = 'dashboard' | 'bookmarks' | 'settings' | 'debug';
 
 interface Props {
   /** The currently-active tab's URL (used to populate the address bar). */

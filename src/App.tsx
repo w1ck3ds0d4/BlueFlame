@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { Bookmarks } from './components/Bookmarks';
 import { BookmarksBar } from './components/BookmarksBar';
 import { CaTrustModal } from './components/CaTrustModal';
 import { Dashboard } from './components/Dashboard';
@@ -48,7 +49,7 @@ interface TabsView {
   active_id: number | null;
 }
 
-type View = 'dashboard' | 'settings' | 'debug';
+type View = 'dashboard' | 'bookmarks' | 'settings' | 'debug';
 
 export default function App() {
   const [view, setView] = useState<View>('dashboard');
@@ -220,7 +221,7 @@ export default function App() {
     const unlisteners: UnlistenFn[] = [];
     listen<string>('blueflame:select-view', (e) => {
       const v = e.payload as View;
-      if (v === 'dashboard' || v === 'settings' || v === 'debug') {
+      if (v === 'dashboard' || v === 'bookmarks' || v === 'settings' || v === 'debug') {
         setView(v);
         goHome();
       }
@@ -466,6 +467,8 @@ export default function App() {
         <div className="browse-stage" aria-label="Browse area - the native webview renders below" />
       ) : view === 'dashboard' ? (
         <Dashboard status={status} stats={stats} onToggled={refresh} />
+      ) : view === 'bookmarks' ? (
+        <Bookmarks version={bookmarksVersion} />
       ) : view === 'debug' ? (
         <Debug />
       ) : (
