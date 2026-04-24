@@ -65,6 +65,13 @@ regex = "1"
 
 # URL parsing
 url = "2"
+# Percent-decoding of URL path segments when deriving a filename
+# from a download URL (free: already transitive via `url`).
+percent-encoding = "2"
+
+# Directly used for building download-stub response bodies (via
+# `Bytes::from(html)`); already transitive via hyper/hudsucker.
+bytes = "1"
 
 # HTML parsing for metasearch result extraction + body-level trust
 # signals (login form cross-origin, password-on-http, outdated JS

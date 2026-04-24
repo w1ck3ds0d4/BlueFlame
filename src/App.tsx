@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Bookmarks } from './components/Bookmarks';
+import { Downloads } from './components/Downloads';
 import { BookmarksBar } from './components/BookmarksBar';
 import { CaTrustModal } from './components/CaTrustModal';
 import { Metrics } from './components/Metrics';
@@ -50,7 +51,7 @@ interface TabsView {
   active_id: number | null;
 }
 
-type View = 'dashboard' | 'bookmarks' | 'metrics' | 'settings' | 'debug';
+type View = 'dashboard' | 'bookmarks' | 'downloads' | 'metrics' | 'settings' | 'debug';
 
 export default function App() {
   const [view, setView] = useState<View>('dashboard');
@@ -225,6 +226,7 @@ export default function App() {
       if (
         v === 'dashboard' ||
         v === 'bookmarks' ||
+        v === 'downloads' ||
         v === 'metrics' ||
         v === 'settings' ||
         v === 'debug'
@@ -488,6 +490,8 @@ export default function App() {
         <Dashboard status={status} stats={stats} onToggled={refresh} />
       ) : view === 'bookmarks' ? (
         <Bookmarks version={bookmarksVersion} />
+      ) : view === 'downloads' ? (
+        <Downloads />
       ) : view === 'metrics' ? (
         <Metrics />
       ) : view === 'debug' ? (

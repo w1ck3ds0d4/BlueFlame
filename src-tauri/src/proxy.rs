@@ -207,6 +207,11 @@ struct BlueFlameHandler {
     /// `lib.rs` reads from the receiver and opens the popup.
     context_token: Arc<String>,
     context_tx: Arc<Mutex<Option<crate::context_menu::ContextMenuTx>>>,
+    /// Shared app handle so the response-side download interceptor can
+    /// resolve the OS download directory, and shared downloads log so
+    /// saved files end up in the UI-visible ring buffer.
+    app_handle: tauri::AppHandle,
+    downloads_log: crate::downloads::SharedDownloadsLog,
 }
 
 impl HttpHandler for BlueFlameHandler {
@@ -315,6 +320,32 @@ impl HttpHandler for BlueFlameHandler {
             has_pp,
             insecure_cookie,
         );
+
+        // Download interception. Servers signal "save, don't render"
+        // via `Content-Disposition: attachment`; honor that by pulling
+        // the bytes through to disk and substituting a tiny HTML stub
+        // so the user's tab shows "Saved to …" instead of staring at
+        // a blank page the webview couldn't render. Chrome-style
+        // gotcha: if content-length exceeds our in-memory cap, we
+        // return an explanatory stub instead of silently truncating.
+        let disposition = headers
+            .get("content-disposition")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+        if disposition
+            .as_deref()
+            .map(|d| d.to_ascii_lowercase().contains("attachment"))
+            .unwrap_or(false)
+        {
+            return intercept_download(
+                res,
+                &url,
+                disposition.as_deref(),
+                &self.app_handle,
+                &self.downloads_log,
+            )
+            .await;
+        }
 
         // Body analysis path. Gated so we don't buffer huge responses:
         //   - content-type must be text/html
@@ -481,6 +512,178 @@ async fn analyze_html_body(
     out
 }
 
+/// Pull a download response body fully into memory (up to our cap),
+/// save it to disk via `downloads::save`, and substitute a short
+/// HTML "Saved to …" page as the response. On any failure we return
+/// an HTML error stub instead of the raw bytes so the user still
+/// sees a useful message in the tab.
+async fn intercept_download(
+    res: Response<Body>,
+    url: &str,
+    disposition: Option<&str>,
+    app: &tauri::AppHandle,
+    log: &crate::downloads::SharedDownloadsLog,
+) -> Response<Body> {
+    use http_body_util::{BodyExt, Full};
+
+    // Grab content-length up-front so we can reject oversized files
+    // before we've buffered them - servers that honor it give us a
+    // cheap pre-flight.
+    let declared_len = res
+        .headers()
+        .get("content-length")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u64>().ok());
+    if let Some(n) = declared_len {
+        if n > crate::downloads::MAX_SIZE {
+            return download_error_stub(
+                url,
+                &format!(
+                    "file too large to save via BlueFlame ({} MB > {} MB cap)",
+                    n / 1024 / 1024,
+                    crate::downloads::MAX_SIZE / 1024 / 1024
+                ),
+            );
+        }
+    }
+
+    let decoded = match hudsucker::decode_response(res) {
+        Ok(r) => r,
+        Err(e) => return download_error_stub(url, &format!("decode: {e}")),
+    };
+    let (_parts, body) = decoded.into_parts();
+    let bytes = match body.collect().await {
+        Ok(c) => c.to_bytes(),
+        Err(e) => return download_error_stub(url, &format!("read body: {e}")),
+    };
+    if bytes.len() as u64 > crate::downloads::MAX_SIZE {
+        return download_error_stub(
+            url,
+            &format!(
+                "file too large to save via BlueFlame ({} MB > {} MB cap)",
+                bytes.len() / 1024 / 1024,
+                crate::downloads::MAX_SIZE / 1024 / 1024,
+            ),
+        );
+    }
+
+    let disp_filename = disposition.and_then(parse_disposition_filename);
+    match crate::downloads::save(log, app, url, disp_filename.as_deref(), &bytes) {
+        Ok(entry) => {
+            let body_html = download_saved_html(&entry);
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", "text/html; charset=utf-8")
+                .header("content-length", body_html.len().to_string())
+                .body(Body::from(Full::new(bytes::Bytes::from(body_html))))
+                .expect("static response")
+        }
+        Err(e) => download_error_stub(url, &e),
+    }
+}
+
+/// Parse out the filename from a Content-Disposition header value.
+/// Handles both the plain `filename="foo.zip"` and the RFC 5987
+/// `filename*=UTF-8''foo%20bar.zip` form. Returns `None` if neither
+/// is present or parseable.
+fn parse_disposition_filename(header: &str) -> Option<String> {
+    // Split on semicolons, trim whitespace, case-insensitively match
+    // the parameter name. Prefer `filename*` (RFC 5987) when both
+    // are present since it's UTF-8 safe.
+    let parts: Vec<&str> = header.split(';').map(|s| s.trim()).collect();
+    let mut star: Option<String> = None;
+    let mut plain: Option<String> = None;
+    for p in parts {
+        let eq = match p.find('=') {
+            Some(i) => i,
+            None => continue,
+        };
+        let (name, rest) = (p[..eq].trim(), p[eq + 1..].trim());
+        let val = rest.trim_matches('"').to_string();
+        if name.eq_ignore_ascii_case("filename*") {
+            // `UTF-8''percent-encoded`
+            if let Some(payload) = val.splitn(3, '\'').nth(2) {
+                let decoded = percent_encoding::percent_decode_str(payload)
+                    .decode_utf8_lossy()
+                    .into_owned();
+                star = Some(decoded);
+            }
+        } else if name.eq_ignore_ascii_case("filename") {
+            plain = Some(val);
+        }
+    }
+    star.or(plain)
+}
+
+fn download_saved_html(entry: &crate::downloads::DownloadEntry) -> String {
+    let filename = html_escape(&entry.filename);
+    let path = html_escape(&entry.path);
+    let size_mb = (entry.size as f64) / 1024.0 / 1024.0;
+    format!(
+        r#"<!doctype html><html><head><meta charset="utf-8"><title>Saved</title>
+<style>
+  body {{ margin:0; padding:48px 24px; background:#0a0a0a; color:#d9e3ef; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; }}
+  main {{ max-width:720px; margin:0 auto; }}
+  h1 {{ color:#00b3ff; font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin:0 0 16px; }}
+  .row {{ margin:8px 0; }}
+  .k {{ color:#6b7a8e; display:inline-block; min-width:90px; }}
+  .v {{ color:#d9e3ef; }}
+  .hint {{ margin-top:18px; color:#4a5363; font-size:11px; }}
+</style></head><body><main>
+<h1>// download saved</h1>
+<div class="row"><span class="k">name:</span> <span class="v">{filename}</span></div>
+<div class="row"><span class="k">saved to:</span> <span class="v">{path}</span></div>
+<div class="row"><span class="k">size:</span> <span class="v">{size_mb:.2} MB</span></div>
+<div class="hint">// BlueFlame's downloads are listed in the downloads view.</div>
+</main></body></html>"#
+    )
+}
+
+fn download_error_stub(url: &str, reason: &str) -> Response<Body> {
+    use http_body_util::Full;
+    let body_html = format!(
+        r#"<!doctype html><html><head><meta charset="utf-8"><title>Download failed</title>
+<style>
+  body {{ margin:0; padding:48px 24px; background:#0a0a0a; color:#d9e3ef; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; }}
+  main {{ max-width:720px; margin:0 auto; }}
+  h1 {{ color:#ff4a5c; font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin:0 0 16px; }}
+  .row {{ margin:8px 0; }}
+  .k {{ color:#6b7a8e; display:inline-block; min-width:90px; }}
+  .v {{ color:#d9e3ef; word-break:break-all; }}
+</style></head><body><main>
+<h1>// download failed</h1>
+<div class="row"><span class="k">reason:</span> <span class="v">{reason}</span></div>
+<div class="row"><span class="k">url:</span> <span class="v">{url}</span></div>
+</main></body></html>"#,
+        reason = html_escape(reason),
+        url = html_escape(url),
+    );
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "text/html; charset=utf-8")
+        .header("content-length", body_html.len().to_string())
+        .body(Body::from(Full::new(bytes::Bytes::from(body_html))))
+        .expect("static response")
+}
+
+/// Minimal HTML-attribute-safe escape. We only emit text content, so
+/// we don't need full HTML entity coverage - just the five that
+/// would otherwise break the surrounding markup or attribute strings.
+fn html_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '&' => out.push_str("&amp;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
 /// Handle to a running proxy. Dropping the runner or calling `shutdown` stops it.
 /// Kept around so a future "restart proxy" command can cleanly reuse the port.
 #[allow(dead_code)]
@@ -524,6 +727,8 @@ pub async fn start(
     upstream: Upstream,
     context_token: Arc<String>,
     context_tx: Arc<Mutex<Option<crate::context_menu::ContextMenuTx>>>,
+    app_handle: tauri::AppHandle,
+    downloads_log: crate::downloads::SharedDownloadsLog,
 ) -> anyhow::Result<ProxyRunner> {
     let cert_params = ca.cert_params().context("building CA params for proxy")?;
     let cert = cert_params
@@ -541,6 +746,8 @@ pub async fn start(
         pending_url: None,
         context_token,
         context_tx,
+        app_handle,
+        downloads_log,
     };
 
     let addr: SocketAddr = ([127, 0, 0, 1], port).into();

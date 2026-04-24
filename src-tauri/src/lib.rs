@@ -6,6 +6,7 @@ mod ca_trust;
 mod commands;
 mod context_menu;
 mod debug_log;
+mod downloads;
 #[cfg(feature = "built-in-tor")]
 mod embedded_tor;
 mod favicons;
@@ -52,6 +53,10 @@ use commands::{
 use context_menu::{
     close_context_menu, get_context_payload, resize_context_menu, ContextStore,
     SharedContextMenuTx, SharedContextStore, SharedContextToken,
+};
+use downloads::{
+    downloads_clear, downloads_list, downloads_open, downloads_reveal, DownloadsLog,
+    SharedDownloadsLog,
 };
 use import_export::{export_data, import_bookmarks_html, import_data};
 use metrics::{get_system_metrics, MetricsCollector, SharedMetrics};
@@ -124,6 +129,7 @@ pub fn run() {
         .manage(context_token.clone())
         .manage(context_store.clone())
         .manage(context_tx_shared.clone())
+        .manage::<SharedDownloadsLog>(Arc::new(DownloadsLog::default()))
         .manage::<SharedMetrics>(Arc::new(MetricsCollector::default()))
         .setup(move |app| {
             // Open the personal-index store so commands can rely on it being in state.
@@ -295,6 +301,10 @@ pub fn run() {
             import_data,
             import_bookmarks_html,
             get_system_metrics,
+            downloads_list,
+            downloads_clear,
+            downloads_open,
+            downloads_reveal,
         ])
         .run(tauri::generate_context!())
         .expect("error while running BlueFlame");
@@ -373,6 +383,7 @@ async fn start_proxy_at_boot(
     // count bump; the actual String isn't duplicated.
     let context_token: std::sync::Arc<String> = (*app.state::<SharedContextToken>()).clone();
     let context_tx = (*app.state::<SharedContextMenuTx>()).clone();
+    let downloads_log: SharedDownloadsLog = (*app.state::<SharedDownloadsLog>()).clone();
 
     let runner = proxy::start(
         port,
@@ -385,6 +396,8 @@ async fn start_proxy_at_boot(
         upstream,
         context_token,
         context_tx,
+        app.clone(),
+        downloads_log,
     )
     .await?;
 
