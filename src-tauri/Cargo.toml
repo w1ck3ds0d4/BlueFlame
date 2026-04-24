@@ -93,7 +93,7 @@ rayon = "1"
 # CPU %, thread count, descendant webview processes). Default features
 # drop the disk/network sub-modules we don't surface, keeping the
 # transitive tree smaller.
-sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+sysinfo = { version = "0.36", default-features = false, features = ["system"] }
 
 [features]
 default = ["built-in-tor"]
