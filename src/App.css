@@ -2777,6 +2777,35 @@ html:has(.menu-popup-body) {
   background: var(--border);
 }
 
+/* Context menu reuses .menu-popup structural CSS; overrides below are
+   just for touch ergonomics (bigger tap targets on mobile) and the
+   initial "..." loading state. */
+.context-menu .menu-popup-item {
+  padding: 10px 12px;
+}
+
+.context-menu-empty,
+.context-menu-error {
+  padding: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+}
+
+.context-menu-error {
+  color: var(--danger);
+}
+
+@media (pointer: coarse) {
+  /* Touch pointer = phone or tablet. Slightly larger rows for easier
+     tap targets; items still look aligned because the grid template
+     shares the same icon column. */
+  .context-menu .menu-popup-item {
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+}
+
 .menu-popup-status {
   display: flex;
   align-items: center;

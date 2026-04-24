@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
+import { ContextMenu } from "./components/ContextMenu";
 import { MenuPopup } from "./components/MenuPopup";
 import { TrustPopup } from "./components/TrustPopup";
 
@@ -58,6 +59,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <TrustPopup />
     ) : panelParam === "menu" ? (
       <MenuPopup />
+    ) : panelParam === "context" ? (
+      <ContextMenu />
     ) : (
       <App />
     )}

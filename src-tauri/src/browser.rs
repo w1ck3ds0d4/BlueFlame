@@ -52,6 +52,160 @@ const MOBILE_USER_AGENT: &str = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleW
 /// Viewport width (window.innerWidth) is NOT spoofed - it reflects
 /// the real webview size and we don't want to lie to CSS media
 /// queries that drive the page's own responsive layout.
+/// JS injected into every tab webview so right-click / long-press
+/// surfaces the BlueFlame context menu instead of the native one.
+/// The handler captures target info (link, image, selection, page
+/// URL) + click coordinates, then fires a POST to the sentinel host
+/// `blueflame.ipc` via `navigator.sendBeacon`. The MITM proxy matches
+/// that host and emits a Rust-side request to open the popup.
+///
+/// The per-launch token prevents a malicious page from forging its
+/// own context-menu requests: only the injected script knows the
+/// token. The template replaces `__BF_TOKEN__` at webview-creation
+/// time so each BlueFlame run gets a fresh value.
+///
+/// Long-press threshold: 500 ms, matching Android/iOS convention.
+/// Scroll (touchmove beyond ~10 px) cancels the press so legitimate
+/// swipes don't trigger a menu.
+const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
+(function () {
+    var BF_TOKEN = "__BF_TOKEN__";
+    var SENTINEL = "http://blueflame.ipc/context";
+    var LONG_PRESS_MS = 500;
+    var MOVE_CANCEL_PX = 10;
+
+    function climbForLink(el) {
+        while (el && el !== document.documentElement) {
+            if (el.tagName === "A" && el.href) return el;
+            el = el.parentElement;
+        }
+        return null;
+    }
+    function climbForImage(el) {
+        while (el && el !== document.documentElement) {
+            if (el.tagName === "IMG" && el.src) return el;
+            el = el.parentElement;
+        }
+        return null;
+    }
+    function selectionText() {
+        try {
+            var s = window.getSelection && window.getSelection();
+            return s ? s.toString() : "";
+        } catch (_) {
+            return "";
+        }
+    }
+
+    function send(ctx) {
+        try {
+            var qs = new URLSearchParams();
+            qs.set("token", BF_TOKEN);
+            qs.set("page", location.href);
+            qs.set("x", String(Math.round(ctx.x)));
+            qs.set("y", String(Math.round(ctx.y)));
+            if (ctx.link) qs.set("link", ctx.link);
+            if (ctx.linkText) qs.set("linkText", ctx.linkText);
+            if (ctx.image) qs.set("image", ctx.image);
+            if (ctx.sel) qs.set("sel", ctx.sel);
+            var url = SENTINEL + "?" + qs.toString();
+            if (navigator.sendBeacon) {
+                // Empty body with the sentinel path + query string is
+                // enough: the proxy reads everything out of the URL.
+                navigator.sendBeacon(url);
+            } else {
+                // Fallback: fire-and-forget POST. Some webviews
+                // disable sendBeacon; fetch with keepalive gives us
+                // the same semantics.
+                fetch(url, { method: "POST", keepalive: true }).catch(function () {});
+            }
+        } catch (_) { /* swallow - never break the page */ }
+    }
+
+    function build(target, clientX, clientY) {
+        var link = climbForLink(target);
+        var img = climbForImage(target);
+        var ctx = {
+            x: clientX,
+            y: clientY,
+            link: link ? link.href : "",
+            linkText: link ? (link.textContent || "").trim().slice(0, 120) : "",
+            image: img ? img.src : "",
+            sel: selectionText().slice(0, 400),
+        };
+        return ctx;
+    }
+
+    // Dismiss any open context popup by firing a sentinel with a
+    // `dismiss=1` flag. Cheap to send; the proxy handler recognizes
+    // `dismiss` and routes to the close path instead of opening a
+    // popup. Tracking `menuOpen` locally keeps this from being sent
+    // on every click - only after we've actually shown a menu.
+    var menuOpen = false;
+    function dismissSentinel() {
+        if (!menuOpen) return;
+        menuOpen = false;
+        try {
+            var qs = new URLSearchParams();
+            qs.set("token", BF_TOKEN);
+            qs.set("dismiss", "1");
+            var url = SENTINEL + "?" + qs.toString();
+            if (navigator.sendBeacon) navigator.sendBeacon(url);
+            else fetch(url, { method: "POST", keepalive: true }).catch(function () {});
+        } catch (_) { /* ignore */ }
+    }
+
+    // Desktop right-click + most webviews' long-press → contextmenu.
+    window.addEventListener("contextmenu", function (e) {
+        try {
+            e.preventDefault();
+            send(build(e.target, e.clientX, e.clientY));
+            menuOpen = true;
+        } catch (_) { /* ignore */ }
+    }, true);
+    window.addEventListener("click", dismissSentinel, true);
+    window.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") dismissSentinel();
+    }, true);
+
+    // iOS/Android long-press: contextmenu is often suppressed by the
+    // native gesture recognizer, so time the touch ourselves.
+    var touchState = null;
+    window.addEventListener("touchstart", function (e) {
+        if (!e.touches || e.touches.length !== 1) return;
+        var t = e.touches[0];
+        touchState = {
+            x: t.clientX,
+            y: t.clientY,
+            target: e.target,
+            timer: window.setTimeout(function () {
+                if (!touchState) return;
+                try {
+                    send(build(touchState.target, touchState.x, touchState.y));
+                    menuOpen = true;
+                } catch (_) { /* ignore */ }
+                touchState = null;
+            }, LONG_PRESS_MS),
+        };
+    }, { passive: true, capture: true });
+    function cancelTouch() {
+        if (touchState) {
+            window.clearTimeout(touchState.timer);
+            touchState = null;
+        }
+    }
+    window.addEventListener("touchend", cancelTouch, { passive: true, capture: true });
+    window.addEventListener("touchcancel", cancelTouch, { passive: true, capture: true });
+    window.addEventListener("touchmove", function (e) {
+        if (!touchState || !e.touches || e.touches.length !== 1) return;
+        var t = e.touches[0];
+        var dx = t.clientX - touchState.x;
+        var dy = t.clientY - touchState.y;
+        if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) cancelTouch();
+    }, { passive: true, capture: true });
+})();
+"#;
+
 const MOBILE_INIT_SCRIPT: &str = r#"
 (function () {
     try {
@@ -424,6 +578,15 @@ async fn open_tab_impl(
                     b = b.user_agent(MOBILE_USER_AGENT);
                     b = b.initialization_script(MOBILE_INIT_SCRIPT);
                 }
+                // Context-menu bridge runs on every tab regardless of
+                // mobile/desktop mode: the handler swallows right-click
+                // AND long-press events + posts the target metadata to
+                // the `blueflame.ipc` sentinel host, which the proxy
+                // intercepts and turns into a popup. Token is
+                // per-launch so a malicious page can't forge requests.
+                let token = crate::context_menu::current_token(&app_clone);
+                let ctx_script = CONTEXT_MENU_INIT_SCRIPT_TEMPLATE.replace("__BF_TOKEN__", &token);
+                b = b.initialization_script(ctx_script);
                 // macOS: route tab traffic through the local MITM
                 // proxy via per-webview proxy_url. Windows + Linux
                 // pick this up from the env vars set before any
@@ -989,6 +1152,9 @@ pub async fn open_menu_popup(
     if let Some(wv) = app.get_webview(MENU_POPUP_LABEL) {
         let _ = wv.close();
     }
+    if let Some(wv) = app.get_webview(crate::context_menu::CONTEXT_MENU_LABEL) {
+        let _ = wv.close();
+    }
     if existing_same_kind {
         return Ok(());
     }
@@ -1079,6 +1245,9 @@ pub fn close_all_popups(app: tauri::AppHandle) -> Result<(), String> {
         let _ = wv.close();
     }
     if let Some(wv) = app.get_webview(MENU_POPUP_LABEL) {
+        let _ = wv.close();
+    }
+    if let Some(wv) = app.get_webview(crate::context_menu::CONTEXT_MENU_LABEL) {
         let _ = wv.close();
     }
     Ok(())

@@ -10,7 +10,7 @@
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
@@ -200,6 +200,13 @@ struct BlueFlameHandler {
     /// request/response pair hits the same handler instance (see
     /// hudsucker::HttpHandler trait docs).
     pending_url: Option<String>,
+    /// IPC back-channel used by the per-tab init script to surface
+    /// context-menu events. Requests to host `blueflame.ipc` with the
+    /// right token are short-circuited: we parse the params and push
+    /// a `ContextMenuRequest` into this channel. A consumer task in
+    /// `lib.rs` reads from the receiver and opens the popup.
+    context_token: Arc<String>,
+    context_tx: Arc<Mutex<Option<crate::context_menu::ContextMenuTx>>>,
 }
 
 impl HttpHandler for BlueFlameHandler {
@@ -208,6 +215,23 @@ impl HttpHandler for BlueFlameHandler {
         _ctx: &HttpContext,
         req: Request<Body>,
     ) -> RequestOrResponse {
+        // Sentinel interception: requests to host `blueflame.ipc` are
+        // the tab-webview → Rust back-channel for context-menu events.
+        // Short-circuit before touching stats/filters so they don't
+        // count toward the user's browsing numbers.
+        if req.uri().host() == Some("blueflame.ipc") {
+            let handled = self.handle_context_sentinel(&req);
+            let res = Response::builder()
+                .status(if handled {
+                    StatusCode::NO_CONTENT
+                } else {
+                    StatusCode::FORBIDDEN
+                })
+                .body(Body::from(&b""[..]))
+                .expect("static response body");
+            return RequestOrResponse::Response(res);
+        }
+
         self.stats.requests_total.fetch_add(1, Ordering::Relaxed);
 
         let url = req.uri().to_string();
@@ -318,6 +342,71 @@ impl HttpHandler for BlueFlameHandler {
     }
 }
 
+impl BlueFlameHandler {
+    /// Validate + parse a sentinel request from the tab init script.
+    /// Returns `true` if the token matched and a context-menu request
+    /// was dispatched to the consumer task. Malformed or bad-token
+    /// requests return `false` so the caller can respond with 403.
+    fn handle_context_sentinel(&self, req: &Request<Body>) -> bool {
+        let query = match req.uri().query() {
+            Some(q) => q,
+            None => return false,
+        };
+        let pairs: std::collections::HashMap<String, String> =
+            url::form_urlencoded::parse(query.as_bytes())
+                .into_owned()
+                .collect();
+
+        let provided = match pairs.get("token") {
+            Some(t) => t.as_str(),
+            None => return false,
+        };
+        let expected: &str = &self.context_token;
+        if provided.len() != expected.len() {
+            return false;
+        }
+        // Constant-time compare.
+        let mut diff = 0u8;
+        for (a, b) in expected.as_bytes().iter().zip(provided.as_bytes()) {
+            diff |= a ^ b;
+        }
+        if diff != 0 {
+            return false;
+        }
+
+        let request = if pairs.get("dismiss").map(|s| s.as_str()) == Some("1") {
+            crate::context_menu::ContextMenuRequest::Dismiss
+        } else {
+            let x: f64 = pairs.get("x").and_then(|s| s.parse().ok()).unwrap_or(0.0);
+            let y: f64 = pairs.get("y").and_then(|s| s.parse().ok()).unwrap_or(0.0);
+            let page_url = pairs.get("page").cloned().unwrap_or_default();
+            let link_url = pairs.get("link").cloned().filter(|s| !s.is_empty());
+            let link_text = pairs.get("linkText").cloned().filter(|s| !s.is_empty());
+            let image_url = pairs.get("image").cloned().filter(|s| !s.is_empty());
+            let selection_text = pairs.get("sel").cloned().filter(|s| !s.is_empty());
+            crate::context_menu::ContextMenuRequest::Open(crate::context_menu::ContextMenuPayload {
+                page_url,
+                link_url,
+                link_text,
+                image_url,
+                selection_text,
+                // x/y are tab-webview-local here. The consumer
+                // task in lib.rs adds the active-tab offset before
+                // opening the popup so anchor_x/y land in main-
+                // window coordinates.
+                screen_x: x,
+                screen_y: y,
+            })
+        };
+        if let Ok(g) = self.context_tx.lock() {
+            if let Some(tx) = g.as_ref() {
+                let _ = tx.send(request);
+            }
+        }
+        true
+    }
+}
+
 /// Decode, collect, analyze and re-emit an HTML response body. Split
 /// out so `handle_response` stays readable. On ANY error (decoder
 /// failure, body collect failure) we fall back to an empty body -
@@ -420,6 +509,8 @@ pub async fn start(
     block_log: Arc<BlockLog>,
     security: Arc<SecurityStore>,
     upstream: Upstream,
+    context_token: Arc<String>,
+    context_tx: Arc<Mutex<Option<crate::context_menu::ContextMenuTx>>>,
 ) -> anyhow::Result<ProxyRunner> {
     let cert_params = ca.cert_params().context("building CA params for proxy")?;
     let cert = cert_params
@@ -435,6 +526,8 @@ pub async fn start(
         block_log: block_log.clone(),
         security: security.clone(),
         pending_url: None,
+        context_token,
+        context_tx,
     };
 
     let addr: SocketAddr = ([127, 0, 0, 1], port).into();

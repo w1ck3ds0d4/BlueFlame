@@ -3,6 +3,7 @@ mod browser;
 mod ca;
 mod ca_trust;
 mod commands;
+mod context_menu;
 mod debug_log;
 #[cfg(feature = "built-in-tor")]
 mod embedded_tor;
@@ -45,6 +46,10 @@ use commands::{
     log_from_frontend, personal_clear_history, personal_recent, personal_search,
     personal_top_visited, refresh_filter_lists, refresh_reputation_feeds, reset_stats, reveal_ca,
     set_metasearch_enabled, set_mobile_ua, set_search_engine, set_tor_settings, url_suggest,
+};
+use context_menu::{
+    close_context_menu, get_context_payload, resize_context_menu, ContextStore,
+    SharedContextMenuTx, SharedContextStore, SharedContextToken,
 };
 use import_export::{export_data, import_bookmarks_html, import_data};
 use proxy::ProxyState;
@@ -95,11 +100,27 @@ pub fn run() {
 
     let proxy_state: Arc<Mutex<ProxyState>> = Arc::new(Mutex::new(ProxyState::default()));
 
+    // Context-menu plumbing: per-launch token + ipc channel + payload
+    // store. The channel sender is exposed to the proxy so the
+    // sentinel handler can push requests; the receiver is owned by a
+    // consumer task spawned below that has an AppHandle and opens
+    // the popup. The store holds one payload per pending popup keyed
+    // by UUID - the popup looks itself up via `get_context_payload`.
+    let context_token: SharedContextToken = context_menu::fresh_token();
+    let context_store: SharedContextStore = std::sync::Arc::new(ContextStore::default());
+    let (context_tx, context_rx) =
+        tokio::sync::mpsc::unbounded_channel::<context_menu::ContextMenuRequest>();
+    let context_tx_shared: SharedContextMenuTx =
+        std::sync::Arc::new(std::sync::Mutex::new(Some(context_tx)));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(proxy_state.clone())
         .manage(Tabs::default())
         .manage(debug_log.clone())
+        .manage(context_token.clone())
+        .manage(context_store.clone())
+        .manage(context_tx_shared.clone())
         .setup(move |app| {
             // Open the personal-index store so commands can rely on it being in state.
             let data = app.path().app_data_dir()?;
@@ -111,6 +132,38 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = start_proxy_at_boot(&app_handle, proxy_state, PROXY_PORT).await {
                     tracing::error!(error = ?e, "failed to auto-start proxy at boot");
+                }
+            });
+
+            // Context-menu consumer: drain the mpsc receiver the proxy
+            // sentinel handler feeds into. `Open` requests spawn a
+            // popup (translating tab-webview-local click coordinates
+            // to main-window coordinates via the active tab bounds);
+            // `Dismiss` requests close any open popup.
+            let mut rx: context_menu::ContextMenuRx = context_rx;
+            let consumer_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                while let Some(req) = rx.recv().await {
+                    match req {
+                        context_menu::ContextMenuRequest::Open(mut payload) => {
+                            let (offset, _) = browser::active_tab_bounds(&consumer_handle);
+                            payload.screen_x += offset.x;
+                            payload.screen_y += offset.y;
+                            if let Err(e) =
+                                context_menu::open_context_menu_popup(&consumer_handle, payload)
+                                    .await
+                            {
+                                tracing::warn!(error = %e, "open context menu failed");
+                            }
+                        }
+                        context_menu::ContextMenuRequest::Dismiss => {
+                            if let Some(wv) =
+                                consumer_handle.get_webview(context_menu::CONTEXT_MENU_LABEL)
+                            {
+                                let _ = wv.close();
+                            }
+                        }
+                    }
                 }
             });
 
@@ -211,6 +264,9 @@ pub fn run() {
             get_trust_history,
             get_reputation_feeds,
             refresh_reputation_feeds,
+            close_context_menu,
+            resize_context_menu,
+            get_context_payload,
             export_data,
             import_data,
             import_bookmarks_html,
@@ -286,6 +342,13 @@ async fn start_proxy_at_boot(
 
     let (upstream, upstream_applied) = resolve_upstream(&data_dir, &proxy_state).await;
 
+    // Copy the token/channel Arcs out of Tauri state so the proxy
+    // handler can match the sentinel host requests without holding a
+    // State<'_> across await points. Cloning an Arc is just a ref-
+    // count bump; the actual String isn't duplicated.
+    let context_token: std::sync::Arc<String> = (*app.state::<SharedContextToken>()).clone();
+    let context_tx = (*app.state::<SharedContextMenuTx>()).clone();
+
     let runner = proxy::start(
         port,
         root_ca,
@@ -295,6 +358,8 @@ async fn start_proxy_at_boot(
         block_log,
         security,
         upstream,
+        context_token,
+        context_tx,
     )
     .await?;
 
