@@ -70,7 +70,11 @@ const MOBILE_USER_AGENT: &str = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleW
 const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
 (function () {
     var BF_TOKEN = "__BF_TOKEN__";
-    var SENTINEL = "http://blueflame.ipc/context";
+    // HTTPS so mixed-content blockers on HTTPS pages don't drop the
+    // sendBeacon before the MITM proxy sees it. Hudsucker's CA is
+    // installed on the system, so it can forge a cert for this host
+    // and intercept the TLS handshake just like any other HTTPS req.
+    var SENTINEL = "https://blueflame.ipc/context";
     var LONG_PRESS_MS = 500;
     var MOVE_CANCEL_PX = 10;
 
@@ -108,16 +112,24 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
             params.set("token", BF_TOKEN);
             var body = params.toString();
             var blob = new Blob([body], { type: "application/x-www-form-urlencoded" });
+            // sendBeacon returns a bool: true if the browser queued the
+            // request, false if it refused (quota, opaque origin on
+            // data: URLs, etc.). A false return is a silent failure the
+            // spec leaves up to the UA, so we always fall back to fetch
+            // when sendBeacon is unavailable OR when it refused to
+            // queue - keepalive gives the same fire-and-forget
+            // semantics when the page is unloading.
+            var queued = false;
             if (navigator.sendBeacon) {
-                navigator.sendBeacon(SENTINEL, blob);
-            } else {
-                // Fallback: some webviews restrict sendBeacon.
-                // keepalive on fetch gives the same fire-and-forget
-                // semantics when the page is unloading.
+                queued = navigator.sendBeacon(SENTINEL, blob) === true;
+            }
+            if (!queued) {
                 fetch(SENTINEL, {
                     method: "POST",
                     body: blob,
                     keepalive: true,
+                    credentials: "omit",
+                    mode: "no-cors",
                 }).catch(function () {});
             }
         } catch (_) { /* swallow - never break the page */ }
