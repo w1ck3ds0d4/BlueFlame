@@ -122,17 +122,23 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
             var queued = false;
             if (navigator.sendBeacon) {
                 queued = navigator.sendBeacon(SENTINEL, blob) === true;
+                console.log("[BlueFlame] sendBeacon ->", queued, "url:", SENTINEL);
+            } else {
+                console.log("[BlueFlame] sendBeacon unavailable");
             }
             if (!queued) {
+                console.log("[BlueFlame] fetch fallback firing");
                 fetch(SENTINEL, {
                     method: "POST",
                     body: blob,
                     keepalive: true,
                     credentials: "omit",
                     mode: "no-cors",
-                }).catch(function () {});
+                })
+                    .then(function (r) { console.log("[BlueFlame] fetch ok status:", r.status, "type:", r.type); })
+                    .catch(function (e) { console.error("[BlueFlame] fetch failed:", e && e.message); });
             }
-        } catch (_) { /* swallow - never break the page */ }
+        } catch (e) { console.error("[BlueFlame] post threw:", e && e.message); }
     }
     function send(ctx) {
         var p = new URLSearchParams();
@@ -175,12 +181,14 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
     }
 
     // Desktop right-click + most webviews' long-press → contextmenu.
+    console.log("[BlueFlame] init script attached, sentinel:", SENTINEL);
     window.addEventListener("contextmenu", function (e) {
+        console.log("[BlueFlame] contextmenu event fired at", e.clientX, e.clientY);
         try {
             e.preventDefault();
             send(build(e.target, e.clientX, e.clientY));
             menuOpen = true;
-        } catch (_) { /* ignore */ }
+        } catch (err) { console.error("[BlueFlame] contextmenu handler threw:", err && err.message); }
     }, true);
 
     // Middle-click on a link → open in a new BlueFlame tab. auxclick
