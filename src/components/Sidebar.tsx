@@ -1,3 +1,13 @@
+import type { ComponentType } from 'react';
+import {
+  Activity,
+  LayoutGrid,
+  Settings as SettingsIcon,
+  Star,
+  Terminal,
+  Download,
+} from 'lucide-react';
+
 type View = 'dashboard' | 'bookmarks' | 'downloads' | 'metrics' | 'settings' | 'debug';
 
 type StatusKind = 'on' | 'off' | 'starting' | 'booting' | 'failed';
@@ -14,17 +24,18 @@ interface Props {
 
 interface NavItem {
   id: View;
-  icon: string;
+  /** Lucide icon component. Rendered at `--icon-size` from CSS. */
+  Icon: ComponentType<{ size?: number; strokeWidth?: number }>;
   label: string;
 }
 
 const NAV: NavItem[] = [
-  { id: 'dashboard', icon: '▮▮▮', label: 'dash' },
-  { id: 'bookmarks', icon: '★', label: 'bkm' },
-  { id: 'downloads', icon: '↓', label: 'dl' },
-  { id: 'metrics', icon: '◊', label: 'mtr' },
-  { id: 'settings', icon: '[=]', label: 'set' },
-  { id: 'debug', icon: '>_', label: 'dbg' },
+  { id: 'dashboard', Icon: LayoutGrid, label: 'dash' },
+  { id: 'bookmarks', Icon: Star, label: 'bkm' },
+  { id: 'downloads', Icon: Download, label: 'dl' },
+  { id: 'metrics', Icon: Activity, label: 'mtr' },
+  { id: 'settings', Icon: SettingsIcon, label: 'set' },
+  { id: 'debug', Icon: Terminal, label: 'dbg' },
 ];
 
 const STATUS_LABEL: Record<StatusKind, string> = {
@@ -41,6 +52,7 @@ export function Sidebar({ view, browsing, onSelect, statusText, statusKind }: Pr
       <nav className="sidebar-nav">
         {NAV.map((item) => {
           const active = !browsing && view === item.id;
+          const { Icon } = item;
           return (
             <button
               key={item.id}
@@ -51,7 +63,7 @@ export function Sidebar({ view, browsing, onSelect, statusText, statusKind }: Pr
               aria-current={active ? 'page' : undefined}
             >
               <span className="sidebar-btn-icon" aria-hidden>
-                {item.icon}
+                <Icon size={18} strokeWidth={1.75} />
               </span>
               <span className="sidebar-btn-label">{item.label}</span>
             </button>

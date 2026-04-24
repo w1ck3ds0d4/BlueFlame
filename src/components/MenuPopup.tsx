@@ -1,6 +1,25 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ComponentType } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
+import {
+  Activity,
+  ArrowLeft,
+  ArrowRight,
+  Bookmark,
+  BookmarkPlus,
+  Download,
+  LayoutGrid,
+  List,
+  Plus,
+  RotateCw,
+  Settings as SettingsIcon,
+  Shield,
+  Star,
+  Terminal,
+} from 'lucide-react';
+
+type LucideIcon = ComponentType<{ size?: number; strokeWidth?: number }>;
 
 type View = 'dashboard' | 'bookmarks' | 'downloads' | 'metrics' | 'settings' | 'debug';
 
@@ -123,29 +142,32 @@ export function MenuPopup() {
   }
 
   if (kind === 'hamburger') {
-    const items: { id: View; icon: string; label: string }[] = [
-      { id: 'dashboard', icon: '▮▮▮', label: 'dash' },
-      { id: 'bookmarks', icon: '★', label: 'bkm' },
-      { id: 'downloads', icon: '↓', label: 'dl' },
-      { id: 'metrics', icon: '◊', label: 'mtr' },
-      { id: 'settings', icon: '[=]', label: 'set' },
-      { id: 'debug', icon: '>_', label: 'dbg' },
+    const items: { id: View; Icon: LucideIcon; label: string }[] = [
+      { id: 'dashboard', Icon: LayoutGrid, label: 'dash' },
+      { id: 'bookmarks', Icon: Star, label: 'bkm' },
+      { id: 'downloads', Icon: Download, label: 'dl' },
+      { id: 'metrics', Icon: Activity, label: 'mtr' },
+      { id: 'settings', Icon: SettingsIcon, label: 'set' },
+      { id: 'debug', Icon: Terminal, label: 'dbg' },
     ];
     return (
       <div className="menu-popup" role="menu" ref={rootRef}>
-        {items.map((item) => (
-          <button
-            key={item.id}
-            role="menuitem"
-            className={`menu-popup-item ${item.id === initialView ? 'menu-popup-item-active' : ''}`}
-            onClick={() => pickView(item.id)}
-          >
-            <span className="menu-popup-icon" aria-hidden>
-              {item.icon}
-            </span>
-            <span>{item.label}</span>
-          </button>
-        ))}
+        {items.map((item) => {
+          const { Icon } = item;
+          return (
+            <button
+              key={item.id}
+              role="menuitem"
+              className={`menu-popup-item ${item.id === initialView ? 'menu-popup-item-active' : ''}`}
+              onClick={() => pickView(item.id)}
+            >
+              <span className="menu-popup-icon" aria-hidden>
+                <Icon size={16} strokeWidth={1.75} />
+              </span>
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
         <div
           className={`menu-popup-status sidebar-status-${statusKind}`}
           title={statusText}
@@ -164,73 +186,37 @@ export function MenuPopup() {
   const canNavigate = browsingParam;
   return (
     <div className="menu-popup menu-popup-right" role="menu" ref={rootRef}>
-      <button
-        role="menuitem"
-        className="menu-popup-item"
-        onClick={() => runCmd('browser_back')}
-        disabled={!canNavigate}
-      >
-        <span className="menu-popup-icon" aria-hidden>
-          ←
-        </span>
-        <span>back</span>
-      </button>
-      <button
-        role="menuitem"
-        className="menu-popup-item"
-        onClick={() => runCmd('browser_forward')}
-        disabled={!canNavigate}
-      >
-        <span className="menu-popup-icon" aria-hidden>
-          →
-        </span>
-        <span>forward</span>
-      </button>
-      <button
-        role="menuitem"
-        className="menu-popup-item"
-        onClick={() => runCmd('browser_reload')}
-        disabled={!canNavigate}
-      >
-        <span className="menu-popup-icon" aria-hidden>
-          ⟳
-        </span>
-        <span>reload</span>
-      </button>
-      <button
-        role="menuitem"
-        className="menu-popup-item"
+      <KebabItem Icon={ArrowLeft} label="back" onClick={() => runCmd('browser_back')} disabled={!canNavigate} />
+      <KebabItem Icon={ArrowRight} label="forward" onClick={() => runCmd('browser_forward')} disabled={!canNavigate} />
+      <KebabItem Icon={RotateCw} label="reload" onClick={() => runCmd('browser_reload')} disabled={!canNavigate} />
+      <KebabItem
+        Icon={bookmarked ? BookmarkPlus : Bookmark}
+        label={bookmarked ? 'remove bookmark' : 'add bookmark'}
         onClick={toggleBookmark}
         disabled={!canNavigate}
-      >
-        <span className="menu-popup-icon" aria-hidden>
-          {bookmarked ? '★' : '☆'}
-        </span>
-        <span>{bookmarked ? 'remove bookmark' : 'add bookmark'}</span>
-      </button>
-      <button
-        role="menuitem"
-        className="menu-popup-item"
-        onClick={() => pickView('bookmarks')}
-      >
-        <span className="menu-popup-icon" aria-hidden>
-          ☰
-        </span>
-        <span>all bookmarks</span>
-      </button>
+      />
+      <KebabItem Icon={List} label="all bookmarks" onClick={() => pickView('bookmarks')} />
       <div className="menu-popup-divider" aria-hidden />
-      <button role="menuitem" className="menu-popup-item" onClick={() => openNewTab(false)}>
-        <span className="menu-popup-icon" aria-hidden>
-          +
-        </span>
-        <span>new tab</span>
-      </button>
-      <button role="menuitem" className="menu-popup-item" onClick={() => openNewTab(true)}>
-        <span className="menu-popup-icon" aria-hidden>
-          +P
-        </span>
-        <span>new private tab</span>
-      </button>
+      <KebabItem Icon={Plus} label="new tab" onClick={() => openNewTab(false)} />
+      <KebabItem Icon={Shield} label="new private tab" onClick={() => openNewTab(true)} />
     </div>
+  );
+}
+
+interface KebabItemProps {
+  Icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}
+
+function KebabItem({ Icon, label, onClick, disabled }: KebabItemProps) {
+  return (
+    <button role="menuitem" className="menu-popup-item" onClick={onClick} disabled={disabled}>
+      <span className="menu-popup-icon" aria-hidden>
+        <Icon size={16} strokeWidth={1.75} />
+      </span>
+      <span>{label}</span>
+    </button>
   );
 }
