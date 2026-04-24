@@ -76,7 +76,7 @@ bytes = "1"
 # HTML parsing for metasearch result extraction + body-level trust
 # signals (login form cross-origin, password-on-http, outdated JS
 # libraries).
-scraper = "0.23"
+scraper = "0.26"
 
 # Stream helpers for collecting response bodies with a size cap before
 # running HTML analysis on them. Already transitive via hudsucker; we
