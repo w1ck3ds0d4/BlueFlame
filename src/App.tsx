@@ -349,10 +349,24 @@ export default function App() {
       } else if (/^[1-9]$/.test(k)) {
         const idx = parseInt(k, 10) - 1;
         if (tabs[idx]) onSelectTab(tabs[idx].id).then(showBrowser);
+      } else if (k === 'f12') {
+        // Tab webview relayed an F12 press through the init script.
+        // Route to the same themed Debug view the shell-level F12
+        // handler uses.
+        setView('debug');
+        goHome();
       }
     }
 
     function onKeyDown(e: KeyboardEvent) {
+      // F12 → our themed Debug view. Native DevTools is still reachable
+      // via Ctrl+Shift+I (Tauri default, we don't override).
+      if (e.key === 'F12') {
+        e.preventDefault();
+        setView('debug');
+        goHome();
+        return;
+      }
       if (!(e.ctrlKey || e.metaKey)) return;
       const k = e.key.toLowerCase();
       // Keys we know how to handle - preventDefault only for those so

@@ -19,6 +19,23 @@ window.addEventListener("error", (e) => {
   logToBackend("error", "frontend:onerror", `${e.message}${where}`);
 });
 
+// Suppress the native webview context menu on every BlueFlame webview
+// (shell + menu/trust/context popups). Without this, right-clicking on
+// a button or the sidebar shows the web-page menu (Reload / Back /
+// View source / Inspect), which leaks the Chromium-browser feel and
+// fights our theme. Tab webviews have their own themed context menu
+// handled server-side; this covers everything else.
+// Exception: inputs + textareas + contentEditable keep the native menu
+// so the user still has Cut/Copy/Paste/Spell-check in the URL bar.
+window.addEventListener("contextmenu", (e) => {
+  const t = e.target as HTMLElement | null;
+  if (!t) return;
+  const tag = t.tagName;
+  const editable = t.isContentEditable === true;
+  if (tag === "INPUT" || tag === "TEXTAREA" || editable) return;
+  e.preventDefault();
+});
+
 window.addEventListener("unhandledrejection", (e) => {
   const reason = e.reason instanceof Error ? e.reason.message : String(e.reason);
   logToBackend("error", "frontend:promise", `unhandled rejection: ${reason}`);

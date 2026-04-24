@@ -196,23 +196,36 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
         "l", "t", "w", "r", "f", "d", ",", "tab",
         "1", "2", "3", "4", "5", "6", "7", "8", "9",
     ]);
-    window.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") { dismissSentinel(); return; }
-        if (!(e.ctrlKey || e.metaKey)) return;
-        var k = (e.key || "").toLowerCase();
-        if (!SHORTCUT_KEYS.has(k)) return;
+    function sendKbd(key, shift) {
         try {
-            e.preventDefault();
-            e.stopPropagation();
             var qs = new URLSearchParams();
             qs.set("token", BF_TOKEN);
             qs.set("action", "kbd");
-            qs.set("key", k);
-            qs.set("shift", e.shiftKey ? "1" : "0");
+            qs.set("key", key);
+            qs.set("shift", shift ? "1" : "0");
             var url = SENTINEL + "?" + qs.toString();
             if (navigator.sendBeacon) navigator.sendBeacon(url);
             else fetch(url, { method: "POST", keepalive: true }).catch(function () {});
         } catch (_) { /* ignore */ }
+    }
+    window.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") { dismissSentinel(); return; }
+        // F12 is special: no modifier, forwards unconditionally so the
+        // user gets our themed Debug view instead of the webview's
+        // native DevTools. Native DevTools are still reachable via
+        // Ctrl+Shift+I (Tauri default, we don't override).
+        if (e.key === "F12") {
+            e.preventDefault();
+            e.stopPropagation();
+            sendKbd("f12", false);
+            return;
+        }
+        if (!(e.ctrlKey || e.metaKey)) return;
+        var k = (e.key || "").toLowerCase();
+        if (!SHORTCUT_KEYS.has(k)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        sendKbd(k, e.shiftKey);
     }, true);
 
     // iOS/Android long-press: contextmenu is often suppressed by the
