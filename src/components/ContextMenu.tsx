@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import {
   ArrowLeft,
   ArrowRight,
@@ -29,20 +30,16 @@ interface Payload {
 }
 
 /**
- * Child-webview popup that renders the context menu. Loaded at
- * `?panel=context&ctx_id=<uuid>`; fetches its payload on mount from
- * the Rust-side in-memory store (one-shot: a second fetch returns
- * the not-found error, so a stale reload can't replay an action).
+ * Warm-cached context-menu popup. The Rust side spawns this webview
+ * once at boot parked offscreen so right-click feels instant. On
+ * every event, Rust emits `context-menu:payload` here; we update
+ * state, measure the rendered height in `useLayoutEffect`, then call
+ * `show_context_menu` to position + reveal at the click coords.
  *
- * Layout: icon-label rows. Items are context-dependent - a link
- * click shows link-related actions; page background shows
- * navigation/bookmark actions. Every action closes the popup via
- * `close_context_menu`.
+ * Action handlers and dismiss both call `hide_context_menu` instead
+ * of closing the webview, so the bundle stays warm for the next RMB.
  */
 export function ContextMenu() {
-  const params = new URLSearchParams(window.location.search);
-  const ctxId = params.get('ctx_id') ?? '';
-
   const [payload, setPayload] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -52,27 +49,38 @@ export function ContextMenu() {
     return () => document.body.classList.remove('menu-popup-body');
   }, []);
 
+  // Subscribe once. Each event replaces the current payload, which
+  // re-runs the layout effect below to measure and reveal.
   useEffect(() => {
-    if (!ctxId) {
-      setError('missing ctx_id');
-      return;
-    }
-    invoke<Payload>('get_context_payload', { ctxId })
-      .then(setPayload)
-      .catch((e) => setError(String(e)));
-  }, [ctxId]);
+    const unlistenPromise = listen<Payload>('context-menu:payload', (e) => {
+      setError(null);
+      setPayload(e.payload);
+    });
+    return () => {
+      unlistenPromise.then((unlisten) => unlisten()).catch(() => undefined);
+    };
+  }, []);
 
+  // Measure the rendered menu and ask Rust to show the popup at the
+  // click coords with the exact height. Doing this in the same paint
+  // as the new payload means the user never sees the popup at the
+  // wrong size or position - it goes from offscreen straight to its
+  // final spot.
   useLayoutEffect(() => {
+    if (!payload) return;
     const el = rootRef.current;
     if (!el) return;
     const h = el.getBoundingClientRect().height;
-    if (h > 0) {
-      invoke('resize_context_menu', { height: Math.ceil(h) }).catch(() => undefined);
-    }
+    if (h <= 0) return;
+    invoke('show_context_menu', {
+      x: payload.screen_x,
+      y: payload.screen_y,
+      height: Math.ceil(h),
+    }).catch(() => undefined);
   }, [payload]);
 
-  async function close() {
-    await invoke('close_context_menu').catch(() => undefined);
+  async function dismiss() {
+    await invoke('hide_context_menu').catch(() => undefined);
   }
 
   async function openTab(url: string, priv_: boolean) {
@@ -87,7 +95,7 @@ export function ContextMenu() {
     } catch (e) {
       setError(String(e));
     }
-    await close();
+    await dismiss();
   }
 
   async function copy(text: string) {
@@ -106,7 +114,7 @@ export function ContextMenu() {
     } catch (e) {
       setError(String(e));
     }
-    await close();
+    await dismiss();
   }
 
   async function bookmarkPage() {
@@ -119,7 +127,7 @@ export function ContextMenu() {
     } catch (e) {
       setError(String(e));
     }
-    await close();
+    await dismiss();
   }
 
   async function navCmd(cmd: 'browser_back' | 'browser_forward' | 'browser_reload') {
@@ -128,7 +136,7 @@ export function ContextMenu() {
     } catch (e) {
       setError(String(e));
     }
-    await close();
+    await dismiss();
   }
 
   async function openDevtools() {
@@ -137,7 +145,7 @@ export function ContextMenu() {
     } catch (e) {
       setError(String(e));
     }
-    await close();
+    await dismiss();
   }
 
   if (error) {
@@ -148,18 +156,14 @@ export function ContextMenu() {
     );
   }
   if (!payload) {
-    return (
-      <div className="menu-popup context-menu" ref={rootRef}>
-        <div className="context-menu-empty">...</div>
-      </div>
-    );
+    // First render before any event arrives. The webview is parked
+    // offscreen so the user never sees this.
+    return <div className="menu-popup context-menu" ref={rootRef} />;
   }
 
   const hasLink = !!payload.link_url;
   const hasImage = !!payload.image_url;
   const hasSelection = !!payload.selection_text;
-  // Trim + cap selection so the menu label doesn't stretch wide on
-  // multi-line copies. 24 chars + ellipsis fits the 240px popup.
   const selectionPreview = hasSelection
     ? truncate(payload.selection_text!.replace(/\s+/g, ' ').trim(), 24)
     : '';

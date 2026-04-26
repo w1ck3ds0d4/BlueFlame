@@ -1,38 +1,32 @@
 //! Right-click / long-press context menu for pages loaded in tab
-//! webviews. Architecturally mirrors the existing `open_menu_popup`
-//! flow (child webview popup anchored to the click position), plus a
-//! small back-channel so JS running inside the tab can signal Rust
-//! that a context menu should open.
+//! webviews.
 //!
-//! The back-channel is a sentinel host (`blueflame.ipc`) that the
-//! MITM proxy intercepts: the per-tab init script calls
-//! `navigator.sendBeacon('http://blueflame.ipc/...')` with the click
-//! target details, the proxy matches the sentinel host + validates
-//! the per-launch auth token, and pushes a `ContextMenuRequest` onto
-//! an mpsc channel. A consumer task in `lib.rs` receives the request
-//! and calls `open_context_menu_popup()` on the main thread.
+//! The popup webview is spawned ONCE at app boot ([`ensure_context_menu_popup`])
+//! and parked offscreen at minimum size. Each right-click delivers a
+//! fresh payload to that warm webview via the `context-menu:payload`
+//! Tauri event ([`deliver_context_menu_payload`]); the React side
+//! updates state, measures the rendered height, then calls
+//! [`show_context_menu`] to position + reveal at the click coords.
+//! Action clicks and dismiss both call [`hide_context_menu`] which
+//! parks it offscreen again, so the React bundle stays warm for the
+//! next event.
 //!
-//! The popup itself is just a tiny React page (`?panel=context`)
-//! that reads its payload via `get_context_payload(ctx_id)` - the
-//! raw URL can be long, so we pass only the UUID through the query
-//! string and keep the actual payload in an in-memory map.
-
-use std::collections::HashMap;
-use std::sync::Mutex;
-use std::time::Instant;
+//! Right-click events themselves arrive over the Tauri IPC bridge,
+//! not HTTP. The previous implementation used a fake `blueflame.ipc`
+//! host that the MITM proxy intercepted, but page CSP `connect-src`
+//! directives silently dropped the request before it left the
+//! webview. See `submit_tab_event` for the IPC entry point.
 
 use serde::Serialize;
 use tauri::{LogicalPosition, LogicalSize, Manager, WebviewBuilder, WebviewUrl};
 
-/// Label of the context-menu popup webview. Unique so open/close can
-/// idempotently target it.
+/// Label of the context-menu popup webview. Unique so reposition,
+/// resize, hide, and event-emit can all idempotently target it.
 pub const CONTEXT_MENU_LABEL: &str = "context-menu";
 
-/// Maximum popup geometry. The React popup calls `resize_context_menu`
-/// with its measured height after mount, so this is just an upper
-/// bound during initial creation before the measurement lands.
+/// Width of the popup. Height is computed from the rendered React
+/// content per-event; this is the only fixed dimension.
 const POPUP_WIDTH: f64 = 240.0;
-const POPUP_MAX_HEIGHT: f64 = 360.0;
 const POPUP_MARGIN: f64 = 6.0;
 
 /// Background color used on the WebviewBuilder so the popup paints
@@ -54,33 +48,6 @@ pub struct ContextMenuPayload {
     pub screen_x: f64,
     pub screen_y: f64,
 }
-
-/// In-memory store: UUID -> payload. The popup fetches its payload
-/// via `get_context_payload(ctx_id)` on mount. Entries are cleared
-/// by `take_context_payload` (one-shot) so a closed popup can't be
-/// re-opened by replaying the URL.
-#[derive(Default)]
-pub struct ContextStore {
-    entries: Mutex<HashMap<String, (ContextMenuPayload, Instant)>>,
-}
-
-impl ContextStore {
-    pub fn put(&self, id: String, payload: ContextMenuPayload) {
-        let mut g = self.entries.lock().expect("context store poisoned");
-        // Sweep stale entries (> 60s old) so we don't leak if a popup
-        // is never opened for some reason.
-        let cutoff = Instant::now() - std::time::Duration::from_secs(60);
-        g.retain(|_, (_, t)| *t > cutoff);
-        g.insert(id, (payload, Instant::now()));
-    }
-
-    pub fn take(&self, id: &str) -> Option<ContextMenuPayload> {
-        let mut g = self.entries.lock().expect("context store poisoned");
-        g.remove(id).map(|(p, _)| p)
-    }
-}
-
-pub type SharedContextStore = std::sync::Arc<ContextStore>;
 
 /// One request from proxy → consumer task. The `KeyboardShortcut`
 /// variant is the tab-webview-side keyboard relay: the init script
@@ -105,10 +72,11 @@ pub enum ContextMenuRequest {
     },
 }
 
-/// Per-launch auth token embedded into the init script. The proxy
-/// sentinel handler rejects requests whose query param doesn't match,
-/// so a malicious page can't forge a context-menu trigger by hand-
-/// crafting its own sendBeacon. A fresh value every launch means
+/// Per-launch auth token embedded into the init script. The
+/// `submit_tab_event` IPC command rejects events whose token doesn't
+/// match, so a hostile page that monkey-patches the IPC bridge can't
+/// fabricate events without first scraping the (function-scoped)
+/// token out of the init script. A fresh value every launch means
 /// even a leaked token is short-lived. Generate once at boot and
 /// hand an `Arc<String>` to every place that needs a read - the
 /// string never changes, so no Mutex is needed.
@@ -116,7 +84,20 @@ pub type SharedContextToken = std::sync::Arc<String>;
 
 /// Generate a fresh per-launch token value.
 pub fn fresh_token() -> SharedContextToken {
-    std::sync::Arc::new(uuid_v4_hex())
+    std::sync::Arc::new(token_hex())
+}
+
+/// 32-hex-char random-ish string for the per-launch token.
+fn token_hex() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id() as u64;
+    format!("{nanos:016x}{pid:08x}{seq:08x}")
 }
 
 /// Read the current token string from Tauri state. Used by
@@ -235,48 +216,23 @@ pub fn submit_tab_event(
     Ok(())
 }
 
-/// Open the context-menu popup anchored to the click position. Called
-/// from the consumer task spawned at boot in `lib.rs`; must run on
-/// the main thread since it spawns a webview child.
-pub async fn open_context_menu_popup(
-    app: &tauri::AppHandle,
-    payload: ContextMenuPayload,
-) -> Result<(), String> {
-    let main = app
-        .get_window("main")
-        .ok_or_else(|| "main window not found".to_string())?;
-    let (main_w, main_h) = {
-        let size = main.inner_size().map_err(|e| format!("inner_size: {e}"))?;
-        let scale = main.scale_factor().map_err(|e| format!("scale: {e}"))?;
-        (size.width as f64 / scale, size.height as f64 / scale)
-    };
+/// Park the popup webview offscreen at minimum size. Used as the
+/// "hidden" state - cheaper than create/destroy on every right-click,
+/// and lets us keep the React bundle warm so subsequent RMBs feel
+/// instant. Some platforms ignore set_size(0,0), so 1x1 with a far-
+/// negative position is the safe portable hide.
+const HIDDEN_POSITION: LogicalPosition<f64> = LogicalPosition::new(-9999.0, -9999.0);
+const HIDDEN_SIZE: LogicalSize<f64> = LogicalSize::new(1.0, 1.0);
 
-    let panel_w = POPUP_WIDTH.min((main_w - 2.0 * POPUP_MARGIN).max(140.0));
-    let panel_h = POPUP_MAX_HEIGHT.min((main_h - POPUP_MARGIN * 2.0).max(100.0));
-    let panel_x = payload
-        .screen_x
-        .min(main_w - panel_w - POPUP_MARGIN)
-        .max(POPUP_MARGIN);
-    let panel_y = payload
-        .screen_y
-        .min(main_h - panel_h - POPUP_MARGIN)
-        .max(POPUP_MARGIN);
-
-    // Only one popup on screen at a time: close any existing context
-    // popup AND the menu / trust popups before spawning.
-    if let Some(wv) = app.get_webview(CONTEXT_MENU_LABEL) {
-        let _ = wv.close();
+/// Spawn the context-menu popup webview parked offscreen. Called once
+/// at app boot so right-click can later just reposition + resize a
+/// pre-warmed webview instead of paying the ~150-300 ms WebView2
+/// process-spawn + React-bundle-load cost on every click. Idempotent:
+/// if the webview already exists (e.g. consumer task re-runs), no-op.
+pub async fn ensure_context_menu_popup(app: &tauri::AppHandle) -> Result<(), String> {
+    if app.get_webview(CONTEXT_MENU_LABEL).is_some() {
+        return Ok(());
     }
-    if let Some(wv) = app.get_webview("menu-popup") {
-        let _ = wv.close();
-    }
-    if let Some(wv) = app.get_webview("trust-panel") {
-        let _ = wv.close();
-    }
-
-    let ctx_id = uuid_v4_hex();
-    app.state::<SharedContextStore>()
-        .put(ctx_id.clone(), payload);
 
     let base = if cfg!(debug_assertions) {
         "http://localhost:1420"
@@ -284,25 +240,20 @@ pub async fn open_context_menu_popup(
         "http://tauri.localhost"
     };
     let mut popup_url = url::Url::parse(base).map_err(|e| format!("parse base url: {e}"))?;
-    {
-        let mut qp = popup_url.query_pairs_mut();
-        qp.append_pair("panel", "context");
-        qp.append_pair("ctx_id", &ctx_id);
-    }
+    popup_url.query_pairs_mut().append_pair("panel", "context");
 
     let (tx, rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
     let app_clone = app.clone();
-    let popup_url_clone = popup_url.clone();
     app.run_on_main_thread(move || {
         let res = app_clone
             .get_window("main")
             .ok_or_else(|| "main window not found".to_string())
             .and_then(|main| {
                 main.add_child(
-                    WebviewBuilder::new(CONTEXT_MENU_LABEL, WebviewUrl::External(popup_url_clone))
+                    WebviewBuilder::new(CONTEXT_MENU_LABEL, WebviewUrl::External(popup_url))
                         .background_color(POPUP_BG_COLOR),
-                    LogicalPosition::new(panel_x, panel_y),
-                    LogicalSize::new(panel_w, panel_h),
+                    HIDDEN_POSITION,
+                    HIDDEN_SIZE,
                 )
                 .map(|_| ())
                 .map_err(|e| format!("add_child context menu: {e}"))
@@ -315,60 +266,82 @@ pub async fn open_context_menu_popup(
     Ok(())
 }
 
-#[tauri::command]
-pub fn close_context_menu(app: tauri::AppHandle) -> Result<(), String> {
+/// Send a fresh payload to the warm popup. The React side listens for
+/// `context-menu:payload`, updates its state, measures, and then calls
+/// [`show_context_menu`] to position + reveal. We hide first so that
+/// if the popup happens to already be visible (rapid double-RMB) the
+/// user doesn't briefly see the old menu at the new position.
+pub fn deliver_context_menu_payload(
+    app: &tauri::AppHandle,
+    payload: ContextMenuPayload,
+) -> Result<(), String> {
+    use tauri::Emitter;
+
     if let Some(wv) = app.get_webview(CONTEXT_MENU_LABEL) {
+        let _ = wv.set_position(HIDDEN_POSITION);
+        let _ = wv.set_size(HIDDEN_SIZE);
+    }
+    // Close the sibling popups (hamburger, trust) so the context menu
+    // is the only popup on screen when it appears.
+    if let Some(wv) = app.get_webview("menu-popup") {
         let _ = wv.close();
     }
+    if let Some(wv) = app.get_webview("trust-panel") {
+        let _ = wv.close();
+    }
+
+    app.emit_to(CONTEXT_MENU_LABEL, "context-menu:payload", payload)
+        .map_err(|e| format!("emit context-menu:payload: {e}"))?;
     Ok(())
 }
 
-/// Shrink-to-fit the popup to the React component's measured height.
-/// Pattern matches `resize_menu_popup`.
+/// Position + size the popup so it's visible at the click coords. The
+/// React side calls this from `useLayoutEffect` once it has measured
+/// its rendered height, so by the time the popup leaves its hidden
+/// parking spot the contents are already laid out at the right
+/// dimensions - no flicker, no shrink-to-fit pop.
 #[tauri::command]
-pub fn resize_context_menu(app: tauri::AppHandle, height: f64) -> Result<(), String> {
+pub fn show_context_menu(app: tauri::AppHandle, x: f64, y: f64, height: f64) -> Result<(), String> {
+    let Some(wv) = app.get_webview(CONTEXT_MENU_LABEL) else {
+        return Ok(());
+    };
+    let main = app
+        .get_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    let (main_w, main_h) = {
+        let size = main.inner_size().map_err(|e| format!("inner_size: {e}"))?;
+        let scale = main.scale_factor().map_err(|e| format!("scale: {e}"))?;
+        (size.width as f64 / scale, size.height as f64 / scale)
+    };
+
+    let panel_w = POPUP_WIDTH.min((main_w - 2.0 * POPUP_MARGIN).max(140.0));
+    let panel_h = height.clamp(40.0, (main_h - POPUP_MARGIN * 2.0).max(100.0));
+    let panel_x = x.min(main_w - panel_w - POPUP_MARGIN).max(POPUP_MARGIN);
+    let panel_y = y.min(main_h - panel_h - POPUP_MARGIN).max(POPUP_MARGIN);
+
+    let _ = wv.set_size(LogicalSize::new(panel_w, panel_h));
+    let _ = wv.set_position(LogicalPosition::new(panel_x, panel_y));
+    Ok(())
+}
+
+/// Hide the popup by parking it offscreen at minimum size. Replaces
+/// the previous close-the-webview behavior so subsequent RMBs reuse
+/// the same warm webview instead of spawning a fresh one.
+#[tauri::command]
+pub fn hide_context_menu(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(wv) = app.get_webview(CONTEXT_MENU_LABEL) {
-        let main = app
-            .get_window("main")
-            .ok_or_else(|| "main window not found".to_string())?;
-        let (_, main_h) = {
-            let size = main.inner_size().map_err(|e| format!("inner_size: {e}"))?;
-            let scale = main.scale_factor().map_err(|e| format!("scale: {e}"))?;
-            (size.width as f64 / scale, size.height as f64 / scale)
-        };
-        let clamped = height.clamp(40.0, main_h - POPUP_MARGIN * 2.0);
-        let _ = wv.set_size(LogicalSize::new(POPUP_WIDTH, clamped));
+        let _ = wv.set_position(HIDDEN_POSITION);
+        let _ = wv.set_size(HIDDEN_SIZE);
     }
     Ok(())
 }
 
-/// Frontend hands us the UUID from its URL; we return the payload
-/// (and remove it from the store so a re-open with the same id
-/// fails closed).
+/// Legacy command name kept so frontend code that still calls
+/// `close_context_menu` keeps working through the migration. The
+/// React component itself was updated to call `hide_context_menu`,
+/// but anything that escaped the rename will still hit this and do
+/// the right thing.
 #[tauri::command]
-pub fn get_context_payload(
-    store: tauri::State<'_, SharedContextStore>,
-    ctx_id: String,
-) -> Result<ContextMenuPayload, String> {
-    store
-        .take(&ctx_id)
-        .ok_or_else(|| "context payload not found or already consumed".to_string())
-}
-
-/// Tiny UUID v4 generator that avoids pulling in another crate just
-/// for this. rand 0.9-style: grab 16 bytes of entropy, mask the
-/// version + variant bits, hex-encode. Uses std::time::SystemTime +
-/// a process-wide counter for uniqueness - not cryptographically
-/// random, but this ID only has to be unique across concurrent popup
-/// events within a single process, not unpredictable.
-fn uuid_v4_hex() -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0);
-    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let pid = std::process::id() as u64;
-    format!("{nanos:016x}{pid:08x}{seq:08x}")
+pub fn close_context_menu(app: tauri::AppHandle) -> Result<(), String> {
+    hide_context_menu(app)
 }
