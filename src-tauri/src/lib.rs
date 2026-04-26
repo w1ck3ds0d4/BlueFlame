@@ -51,8 +51,8 @@ use commands::{
     set_metasearch_enabled, set_mobile_ua, set_search_engine, set_tor_settings, url_suggest,
 };
 use context_menu::{
-    close_context_menu, get_context_payload, resize_context_menu, submit_tab_event, ContextStore,
-    SharedContextMenuTx, SharedContextStore, SharedContextToken,
+    close_context_menu, hide_context_menu, show_context_menu, submit_tab_event,
+    SharedContextMenuTx, SharedContextToken,
 };
 use downloads::{
     downloads_clear, downloads_list, downloads_open, downloads_reveal, DownloadsLog,
@@ -108,14 +108,13 @@ pub fn run() {
 
     let proxy_state: Arc<Mutex<ProxyState>> = Arc::new(Mutex::new(ProxyState::default()));
 
-    // Context-menu plumbing: per-launch token + ipc channel + payload
-    // store. The channel sender is exposed to the proxy so the
-    // sentinel handler can push requests; the receiver is owned by a
-    // consumer task spawned below that has an AppHandle and opens
-    // the popup. The store holds one payload per pending popup keyed
-    // by UUID - the popup looks itself up via `get_context_payload`.
+    // Context-menu plumbing: per-launch token + IPC channel. The token
+    // is baked into the per-tab init script so the JS can authenticate
+    // when calling `submit_tab_event`. The channel sender is owned by
+    // that command; the receiver is owned by the consumer task spawned
+    // below that holds an AppHandle and emits payloads to the warm
+    // popup webview.
     let context_token: SharedContextToken = context_menu::fresh_token();
-    let context_store: SharedContextStore = std::sync::Arc::new(ContextStore::default());
     let (context_tx, context_rx) =
         tokio::sync::mpsc::unbounded_channel::<context_menu::ContextMenuRequest>();
     let context_tx_shared: SharedContextMenuTx =
@@ -127,7 +126,6 @@ pub fn run() {
         .manage(Tabs::default())
         .manage(debug_log.clone())
         .manage(context_token.clone())
-        .manage(context_store.clone())
         .manage(context_tx_shared.clone())
         .manage::<SharedDownloadsLog>(Arc::new(DownloadsLog::default()))
         .manage::<SharedMetrics>(Arc::new(MetricsCollector::default()))
@@ -145,11 +143,27 @@ pub fn run() {
                 }
             });
 
-            // Context-menu consumer: drain the mpsc receiver the proxy
-            // sentinel handler feeds into. `Open` requests spawn a
-            // popup (translating tab-webview-local click coordinates
-            // to main-window coordinates via the active tab bounds);
-            // `Dismiss` requests close any open popup.
+            // Pre-warm the context-menu popup webview at boot. Spawning
+            // a webview on every right-click costs ~150-300 ms (process
+            // start + bundle load), which the user perceives as a
+            // visible delay between clicking and seeing the menu. By
+            // creating it once parked offscreen we trade ~50 MB of
+            // resident memory for instant subsequent opens.
+            let warm_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = context_menu::ensure_context_menu_popup(&warm_handle).await {
+                    tracing::warn!(error = %e, "failed to pre-warm context menu popup");
+                }
+            });
+
+            // Context-menu consumer: drain the mpsc receiver the IPC
+            // command pushes to. `Open` requests deliver a fresh
+            // payload to the warm popup webview (translating
+            // tab-webview-local click coords to main-window coords via
+            // the active tab bounds); the popup React side measures
+            // its rendered height and calls `show_context_menu` to
+            // reveal at the right place. `Dismiss` parks the popup
+            // offscreen so it stays warm for the next event.
             let mut rx: context_menu::ContextMenuRx = context_rx;
             let consumer_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -159,19 +173,15 @@ pub fn run() {
                             let (offset, _) = browser::active_tab_bounds(&consumer_handle);
                             payload.screen_x += offset.x;
                             payload.screen_y += offset.y;
-                            if let Err(e) =
-                                context_menu::open_context_menu_popup(&consumer_handle, payload)
-                                    .await
-                            {
-                                tracing::warn!(error = %e, "open context menu failed");
+                            if let Err(e) = context_menu::deliver_context_menu_payload(
+                                &consumer_handle,
+                                payload,
+                            ) {
+                                tracing::warn!(error = %e, "deliver context menu payload failed");
                             }
                         }
                         context_menu::ContextMenuRequest::Dismiss => {
-                            if let Some(wv) =
-                                consumer_handle.get_webview(context_menu::CONTEXT_MENU_LABEL)
-                            {
-                                let _ = wv.close();
-                            }
+                            let _ = context_menu::hide_context_menu(consumer_handle.clone());
                         }
                         context_menu::ContextMenuRequest::KeyboardShortcut { key, shift } => {
                             // Relay the tab-focused shortcut up to the
@@ -296,8 +306,8 @@ pub fn run() {
             get_reputation_feeds,
             refresh_reputation_feeds,
             close_context_menu,
-            resize_context_menu,
-            get_context_payload,
+            hide_context_menu,
+            show_context_menu,
             submit_tab_event,
             export_data,
             import_data,
