@@ -51,7 +51,7 @@ use commands::{
     set_metasearch_enabled, set_mobile_ua, set_search_engine, set_tor_settings, url_suggest,
 };
 use context_menu::{
-    close_context_menu, get_context_payload, resize_context_menu, ContextStore,
+    close_context_menu, get_context_payload, resize_context_menu, submit_tab_event, ContextStore,
     SharedContextMenuTx, SharedContextStore, SharedContextToken,
 };
 use downloads::{
@@ -298,6 +298,7 @@ pub fn run() {
             close_context_menu,
             resize_context_menu,
             get_context_payload,
+            submit_tab_event,
             export_data,
             import_data,
             import_bookmarks_html,

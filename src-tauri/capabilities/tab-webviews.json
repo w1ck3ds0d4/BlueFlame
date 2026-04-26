@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "tab-webviews",
+  "description": "Per-tab webview capability. Grants the IPC bridge so the injected init script can call submit_tab_event to relay right-click / middle-click / keyboard events to the shell, and grants internal_toggle_devtools so the context menu's Inspect item can open native DevTools on the active tab.",
+  "windows": ["main"],
+  "webviews": ["browse-*"],
+  "permissions": [
+    "core:default",
+    "core:webview:allow-internal-toggle-devtools"
+  ]
+}

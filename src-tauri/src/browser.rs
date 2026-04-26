@@ -70,11 +70,14 @@ const MOBILE_USER_AGENT: &str = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleW
 const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
 (function () {
     var BF_TOKEN = "__BF_TOKEN__";
-    // HTTPS so mixed-content blockers on HTTPS pages don't drop the
-    // sendBeacon before the MITM proxy sees it. Hudsucker's CA is
-    // installed on the system, so it can forge a cert for this host
-    // and intercept the TLS handshake just like any other HTTPS req.
-    var SENTINEL = "https://blueflame.ipc/context";
+    // Tauri IPC bridge. We used to POST to a fake `blueflame.ipc` host
+    // that the MITM proxy intercepted, but page CSP `connect-src`
+    // directives (Wikipedia, GitHub, most modern apps) silently
+    // dropped the call before it left the webview - sendBeacon would
+    // even return true because the browser had queued it, but the
+    // request never made it past CSP. IPC is not a network call, so
+    // CSP does not apply. The tab-webviews capability grants this
+    // webview access to the bridge.
     var LONG_PRESS_MS = 500;
     var MOVE_CANCEL_PX = 10;
 
@@ -101,49 +104,28 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
         }
     }
 
-    // Post form-encoded data to the sentinel. We put *all* params
-    // in the BODY rather than the URL because pages with long URLs
-    // (search result pages, docs with deep anchors) were pushing
-    // our sentinel URI past hyper's 4 KB limit, which made the
-    // proxy drop the request with "URI too long" and the menu
-    // never opened.
-    function post(params) {
+    // Dispatch a tab event over the Tauri IPC bridge. Silent failure
+    // by design - if the capability isn't granted or the bridge isn't
+    // injected (rare, would mean Tauri config drifted), we'd rather
+    // do nothing than break the page.
+    function dispatch(event) {
         try {
-            params.set("token", BF_TOKEN);
-            var body = params.toString();
-            var blob = new Blob([body], { type: "application/x-www-form-urlencoded" });
-            // sendBeacon returns a bool: true if the browser queued the
-            // request, false if it refused (quota, opaque origin on
-            // data: URLs, etc.). A false return is a silent failure the
-            // spec leaves up to the UA, so we always fall back to fetch
-            // when sendBeacon is unavailable OR when it refused to
-            // queue - keepalive gives the same fire-and-forget
-            // semantics when the page is unloading.
-            var queued = false;
-            if (navigator.sendBeacon) {
-                queued = navigator.sendBeacon(SENTINEL, blob) === true;
-            }
-            if (!queued) {
-                fetch(SENTINEL, {
-                    method: "POST",
-                    body: blob,
-                    keepalive: true,
-                    credentials: "omit",
-                    mode: "no-cors",
-                }).catch(function () {});
-            }
-        } catch (_) { /* swallow - never break the page */ }
+            var ipc = window.__TAURI_INTERNALS__;
+            if (!ipc || typeof ipc.invoke !== "function") return;
+            ipc.invoke("submit_tab_event", { token: BF_TOKEN, event: event });
+        } catch (_) { /* swallow */ }
     }
     function send(ctx) {
-        var p = new URLSearchParams();
-        p.set("page", location.href);
-        p.set("x", String(Math.round(ctx.x)));
-        p.set("y", String(Math.round(ctx.y)));
-        if (ctx.link) p.set("link", ctx.link);
-        if (ctx.linkText) p.set("linkText", ctx.linkText);
-        if (ctx.image) p.set("image", ctx.image);
-        if (ctx.sel) p.set("sel", ctx.sel);
-        post(p);
+        dispatch({
+            kind: "open",
+            page: location.href,
+            x: Math.round(ctx.x),
+            y: Math.round(ctx.y),
+            link: ctx.link || "",
+            linkText: ctx.linkText || "",
+            image: ctx.image || "",
+            sel: ctx.sel || "",
+        });
     }
 
     function build(target, clientX, clientY) {
@@ -160,18 +142,14 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
         return ctx;
     }
 
-    // Dismiss any open context popup by firing a sentinel with a
-    // `dismiss=1` flag. Cheap to send; the proxy handler recognizes
-    // `dismiss` and routes to the close path instead of opening a
-    // popup. Tracking `menuOpen` locally keeps this from being sent
-    // on every click - only after we've actually shown a menu.
+    // Dismiss any open context popup. Tracking `menuOpen` locally
+    // keeps this from firing on every click - only after we've
+    // actually shown a menu.
     var menuOpen = false;
-    function dismissSentinel() {
+    function dismissMenu() {
         if (!menuOpen) return;
         menuOpen = false;
-        var p = new URLSearchParams();
-        p.set("dismiss", "1");
-        post(p);
+        dispatch({ kind: "dismiss" });
     }
 
     // Desktop right-click + most webviews' long-press → contextmenu.
@@ -187,38 +165,31 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
     // fires for mouse buttons other than left; button === 1 is middle.
     // preventDefault stops the webview from opening a new popup window
     // (which wouldn't be integrated with our tab system). The actual
-    // open is dispatched through the same sentinel channel.
+    // open is dispatched through the same IPC channel.
     window.addEventListener("auxclick", function (e) {
         if (e.button !== 1) return;
         var link = climbForLink(e.target);
         if (!link || !link.href) return;
         e.preventDefault();
-        var p = new URLSearchParams();
-        p.set("action", "middleclick");
-        p.set("url", link.href);
-        post(p);
+        dispatch({ kind: "middleclick", url: link.href });
     }, true);
-    window.addEventListener("click", dismissSentinel, true);
+    window.addEventListener("click", dismissMenu, true);
 
     // Relay Ctrl/Meta keyboard shortcuts the React shell already
     // handles (T/W/L/F/R/D/,/Tab/1-9) so they fire even when a tab
     // webview has focus. Without this, Ctrl+T inside youtube.com goes
     // to youtube's capture (or nowhere) instead of opening a BlueFlame
-    // tab. We preventDefault + sendBeacon here; the proxy maps action=
-    // kbd to a Tauri event that App.tsx picks up.
+    // tab. We preventDefault and dispatch here; the consumer task maps
+    // the kbd event to a Tauri event that App.tsx picks up.
     var SHORTCUT_KEYS = new Set([
         "l", "t", "w", "r", "f", "d", ",", "tab",
         "1", "2", "3", "4", "5", "6", "7", "8", "9",
     ]);
     function sendKbd(key, shift) {
-        var p = new URLSearchParams();
-        p.set("action", "kbd");
-        p.set("key", key);
-        p.set("shift", shift ? "1" : "0");
-        post(p);
+        dispatch({ kind: "kbd", key: key, shift: !!shift });
     }
     window.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") { dismissSentinel(); return; }
+        if (e.key === "Escape") { dismissMenu(); return; }
         // F12 is special: no modifier, forwards unconditionally so the
         // user gets our themed Debug view instead of the webview's
         // native DevTools. Native DevTools are still reachable via

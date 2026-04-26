@@ -132,6 +132,109 @@ pub type ContextMenuTx = tokio::sync::mpsc::UnboundedSender<ContextMenuRequest>;
 pub type ContextMenuRx = tokio::sync::mpsc::UnboundedReceiver<ContextMenuRequest>;
 pub type SharedContextMenuTx = std::sync::Arc<std::sync::Mutex<Option<ContextMenuTx>>>;
 
+/// JSON payload posted by the per-tab init script via Tauri IPC. The
+/// `kind` discriminator picks which `ContextMenuRequest` variant to
+/// dispatch. We can't use the request enum directly because serde's
+/// untagged enum deserialization is fragile across struct variants;
+/// the explicit tag keeps the wire format predictable.
+#[derive(Debug, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum TabEvent {
+    Open {
+        page: String,
+        x: f64,
+        y: f64,
+        #[serde(default)]
+        link: Option<String>,
+        #[serde(default, rename = "linkText")]
+        link_text: Option<String>,
+        #[serde(default)]
+        image: Option<String>,
+        #[serde(default)]
+        sel: Option<String>,
+    },
+    Dismiss,
+    Kbd {
+        key: String,
+        #[serde(default)]
+        shift: bool,
+    },
+    Middleclick {
+        url: String,
+    },
+}
+
+/// Tauri IPC entry point invoked by the per-tab init script for every
+/// right-click, middle-click, dismiss, and keyboard relay event. We
+/// dropped the previous proxy-based HTTP sentinel because page CSP
+/// `connect-src` directives blocked the request before the MITM proxy
+/// ever saw it (sendBeacon returned true but the browser silently
+/// dropped the network call). IPC bypasses CSP entirely because it
+/// rides Tauri's postMessage bridge, not a network request.
+///
+/// Token check is preserved so a hostile page that monkey-patches
+/// `__TAURI_INTERNALS__.invoke` can't fabricate events without first
+/// scraping the token out of the (function-scoped) init script.
+#[tauri::command]
+pub fn submit_tab_event(
+    tx_state: tauri::State<'_, SharedContextMenuTx>,
+    token_state: tauri::State<'_, SharedContextToken>,
+    token: String,
+    event: TabEvent,
+) -> Result<(), String> {
+    let expected: &str = &token_state;
+    if token.len() != expected.len() {
+        return Err("token length mismatch".into());
+    }
+    let mut diff = 0u8;
+    for (a, b) in expected.as_bytes().iter().zip(token.as_bytes()) {
+        diff |= a ^ b;
+    }
+    if diff != 0 {
+        return Err("token mismatch".into());
+    }
+
+    let request = match event {
+        TabEvent::Open {
+            page,
+            x,
+            y,
+            link,
+            link_text,
+            image,
+            sel,
+        } => ContextMenuRequest::Open(ContextMenuPayload {
+            page_url: page,
+            link_url: link.filter(|s| !s.is_empty()),
+            link_text: link_text.filter(|s| !s.is_empty()),
+            image_url: image.filter(|s| !s.is_empty()),
+            selection_text: sel.filter(|s| !s.is_empty()),
+            screen_x: x,
+            screen_y: y,
+        }),
+        TabEvent::Dismiss => ContextMenuRequest::Dismiss,
+        TabEvent::Kbd { key, shift } => {
+            if key.is_empty() {
+                return Err("kbd event missing key".into());
+            }
+            ContextMenuRequest::KeyboardShortcut { key, shift }
+        }
+        TabEvent::Middleclick { url } => {
+            if url.is_empty() {
+                return Err("middleclick event missing url".into());
+            }
+            ContextMenuRequest::OpenInNewTab { url }
+        }
+    };
+
+    if let Ok(g) = tx_state.lock() {
+        if let Some(tx) = g.as_ref() {
+            let _ = tx.send(request);
+        }
+    }
+    Ok(())
+}
+
 /// Open the context-menu popup anchored to the click position. Called
 /// from the consumer task spawned at boot in `lib.rs`; must run on
 /// the main thread since it spawns a webview child.
