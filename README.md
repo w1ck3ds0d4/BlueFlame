@@ -6,13 +6,33 @@ Privacy-first browser shell. On desktop, an embedded MITM filter proxy strips tr
 
 ## Features
 
-- **Tauri desktop shell** - native app, system WebView, minimal chrome
-- **Embedded MITM proxy** - intercepts all WebView traffic locally (HTTP and HTTPS)
+### Privacy + filtering
+
+- **Embedded MITM proxy** - intercepts all WebView traffic locally (HTTP and HTTPS) via the `hudsucker` crate
 - **Self-signed root CA** - generated on first run and persisted to the user data dir; key never leaves disk
-- **Built-in blocklist** - tiny default list covering the worst offenders (doubleclick, GA, GTM, hotjar, mixpanel, segment, amplitude, fb pixels)
-- **Filter list support** - load easylist-compatible rules into SQLite; live-reload without restart
+- **Built-in blocklist** - covers the worst offenders out of the box (doubleclick, GA, GTM, hotjar, mixpanel, segment, amplitude, fb pixels)
+- **Filter list support** - EasyPrivacy + EasyList subscribed by default, easylist-compatible rules compiled into SQLite, live-reload without restart
+- **Body analysis + reputation** - request/response analysis hooks plus a URL reputation pass for fingerprinting + tracking heuristics
+- **Embedded Tor (via arti)** - SOCKS connector wired through to the proxy so any tab can route over Tor without an external client
+- **Private tabs** - sessions isolated from the main store
+
+### Browser shell
+
+- **Tabs + tab switcher** - middle-click a link to open in a new BlueFlame tab; relayed `Ctrl+T/W/L/F/R/D/Tab/1-9` keyboard shortcuts from inside tab webviews
+- **Bookmarks** - slash-path folder tree, full-page browser, mobile kebab entry, Netscape `bookmarks.html` import, settings JSON backup/restore
+- **Downloads** - saves Content-Disposition attachments with a list view UI
+- **Themed right-click context menu** - browser-style actions (open, copy link, view source, inspect) across desktop and mobile long-press; suppresses the native menu and routes F12 to the in-app Debug view
+- **Find-in-page** - dedicated `FindBar` component, `Ctrl+F` from any tab
+- **Search bar + metasearch** - configurable engines including Ahmia for `.onion` indexing
+- **Resource monitor panel** - ASCII sparklines for CPU / memory / network alongside the privacy dashboard
+- **New-tab page + branded UI** - gradient logo, lucide icon set across navigation
+- **Mobile (Android) chrome** - WebView's native `shouldInterceptRequest` does the filtering, no proxy or CA trust step needed; dedicated mobile UI components
+
+### Storage + observability
+
+- **SQLite storage** - history, bookmarks, settings, filter lists, downloads stored locally
 - **Privacy dashboard** - live counter of requests total, requests blocked, bytes saved
-- **SQLite storage** - history, bookmarks, settings, filter lists stored locally
+- **Block log** - per-request view of what the proxy stripped, in real time
 - **No telemetry** - BlueFlame itself phones home to nothing; the only network traffic is what you browse
 
 ---
@@ -111,18 +131,50 @@ Invoke the `refresh_filter_lists` Tauri command (or, later, click Refresh in Set
 BlueFlame/
   src/                                  React + Vite frontend
     main.tsx                            Entry
-    App.tsx                             Shell with chrome + dashboard
+    App.tsx                             Shell, tab strip, chrome
     App.css                             Dark theme styles
+    ascii.ts                            ASCII sparkline + glyph helpers
+    useWebviewOverlay.ts                Hook for popup webviews
+    components/
+      TitleBar.tsx, TabStrip.tsx,       Browser chrome
+        TabSwitcher.tsx, UrlBar.tsx,
+        Sidebar.tsx
+      Bookmarks.tsx,                    Bookmarks tree + bar
+        BookmarksBar.tsx
+      Downloads.tsx                     Download list view
+      ContextMenu.tsx, MenuPopup.tsx    Right-click + dropdown menus
+      FindBar.tsx                       Ctrl+F find-in-page
+      Dashboard.tsx, BlockLog.tsx,      Privacy dashboard + per-request log
+        Metrics.tsx                     Resource monitor sparklines
+      CaTrustModal.tsx, TrustPopup.tsx  CA install prompts
+      Settings.tsx, Debug.tsx           Settings page + F12 view
+      MobileChrome.tsx                  Mobile-shaped UI for Android
+      PersonalIndex.tsx                 New-tab dashboard
   src-tauri/                            Rust Tauri backend
     src/
-      lib.rs                            Tauri app entry point + command wiring
+      lib.rs, main.rs                   App entry + binary wrapper
       commands.rs                       Tauri commands exposed to frontend
-      proxy.rs                          MITM proxy core, stats, filters
-      ca.rs                             Root CA generation and persistence
-      storage.rs                        SQLite store for history/bookmarks/settings
-      main.rs                           Binary wrapper
-    Cargo.toml                          Rust deps (tauri, hudsucker, rcgen, rusqlite)
+      proxy.rs                          hudsucker MITM proxy, stats, filtering
+      ca.rs, ca_trust.rs, trust.rs      Root CA generation, persistence, OS trust install
+      tls_verifier.rs                   Custom TLS cert verification
+      storage.rs                        SQLite (history, bookmarks, settings, filter lists, downloads)
+      filter_parser.rs, list_loader.rs  EasyList rule parser + remote list fetcher
+      body_analysis.rs, reputation.rs   Request/response heuristics + URL reputation pass
+      browser.rs, session.rs, new_tab.rs Tab session management + new-tab page
+      context_menu.rs                   Right-click action backend
+      downloads.rs                      Content-Disposition attachment handler
+      embedded_tor.rs, socks_connector.rs Arti-backed Tor SOCKS proxy
+      favicons.rs                       Favicon fetch + cache
+      brand.rs                          Logo + branding assets
+      search.rs, metasearch.rs          Search bar + engine routing
+      metrics.rs                        Resource monitor backend
+      import_export.rs                  Settings JSON + Netscape bookmarks HTML
+      security.rs                       Security utility surface
+      debug_log.rs, util.rs             Logging + helpers
+    Cargo.toml                          Rust deps (tauri, hudsucker, rcgen, rusqlite,
+                                          arti-client, tor-rtcompat)
     tauri.conf.json                     Tauri app config
+    gen/android/                        Android Studio + Gradle project
     build.rs                            Build-time code gen
   .github/
     workflows/ci.yml                    Build + test
