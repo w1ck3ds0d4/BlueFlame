@@ -50,7 +50,7 @@ x509-parser = "0.18"
 webpki-roots = "1"
 
 # Storage (history, bookmarks, settings)
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.38", features = ["bundled"] }
 
 # Logging
 tracing = "0.1"
