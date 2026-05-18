@@ -341,60 +341,117 @@ const MOBILE_INIT_SCRIPT: &str = r#"
 })();
 "#;
 
-/// YouTube content-script: hides static ad placements via CSS, auto-
-/// clicks "Skip Ad", and fast-forwards unskippable in-stream ads. URL
-/// filtering can't catch YouTube ads because the ad video is served
-/// from the same googlevideo.com hostnames as the actual video, so the
-/// only reliable handle is the DOM (the same approach uBlock Origin
-/// uses for YouTube). The `__BF_BLOCK_ADS__` placeholder is replaced
-/// at tab creation time so disabling the master switch in Settings
-/// gives the user back the original page on the next tab refresh.
+/// YouTube content-script. Network filtering can't catch YouTube ads
+/// because the ad video is served from the same `googlevideo.com`
+/// hostnames as the real video, so the only reliable handle is the
+/// DOM. Mirrors uBlock Origin's well-tested approach: a single
+/// `MutationObserver` watching class changes on the player element
+/// reacts the instant `.ad-showing` lands (cheaper and orders of
+/// magnitude faster than polling). A low-frequency interval is kept
+/// as a backstop in case YouTube rerenders the whole tree.
+///
+/// The `__BF_BLOCK_ADS__` placeholder is replaced at tab creation
+/// with `true` / `false` so disabling the Settings master switch
+/// gives the user the original page back on the next page load.
 const YOUTUBE_AD_SKIP_INIT_SCRIPT_TEMPLATE: &str = r#"
 (function() {
   if (!__BF_BLOCK_ADS__) return;
-  // Match youtube.com, www.youtube.com, m.youtube.com, music.youtube.com.
-  // Anything else is a no-op so this script is safe to inject globally.
   var host = location.hostname || '';
   if (!/(^|\.)youtube\.com$/i.test(host)) return;
 
   // Static ad placements: masthead, in-feed promoted videos, sidebar
-  // promos, overlay banners. CSS keeps them out of the DOM-render path
-  // without us having to chase every YouTube rerender.
-  try {
-    var style = document.createElement('style');
-    style.setAttribute('data-blueflame', 'yt-ad-hide');
-    style.textContent = [
-      '.ytp-ad-overlay-slot, .ytp-ad-image-overlay, .ytp-ad-overlay-container,',
-      'ytd-display-ad-renderer, ytd-promoted-sparkles-web-renderer,',
-      'ytd-banner-promo-renderer, ytd-statement-banner-renderer,',
-      'ytd-mealbar-promo-renderer, ytd-ad-slot-renderer,',
-      'ytd-promoted-video-renderer, ytd-in-feed-ad-layout-renderer,',
-      'ytd-rich-item-renderer:has(ytd-ad-slot-renderer),',
-      'ytd-rich-item-renderer:has(ytd-display-ad-renderer),',
-      '#masthead-ad, #player-ads, ytd-action-companion-ad-renderer',
-      '{ display: none !important; }'
-    ].join(' ');
-    (document.head || document.documentElement).appendChild(style);
-  } catch (e) { /* page CSP may block style insert; nothing else to try */ }
-
-  // In-stream video ads: poll the player ~3x/sec. Cheap (one query,
-  // one possible click). YouTube cycles ad slots in the same <video>
-  // element as the real content, so we drive currentTime to the end
-  // and crank playbackRate to chew through any seek-locked frames.
-  setInterval(function() {
+  // promos, overlay banners. uBlock's curated selector list (kept in
+  // sync with the YouTube renderer custom-element names that turn
+  // over every few months). CSS-hiding these is independent of the
+  // in-stream ad logic below.
+  var HIDE_CSS = [
+    '#masthead-ad,',
+    '#player-ads,',
+    'ytd-display-ad-renderer,',
+    'ytd-promoted-sparkles-web-renderer,',
+    'ytd-promoted-sparkles-text-search-renderer,',
+    'ytd-promoted-video-renderer,',
+    'ytd-search-pyv-renderer,',
+    'ytd-ad-slot-renderer,',
+    'ytd-action-companion-ad-renderer,',
+    'ytd-banner-promo-renderer,',
+    'ytd-statement-banner-renderer,',
+    'ytd-mealbar-promo-renderer,',
+    'ytd-in-feed-ad-layout-renderer,',
+    'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"],',
+    'ytd-rich-item-renderer:has(ytd-ad-slot-renderer),',
+    'ytd-rich-item-renderer:has(ytd-display-ad-renderer),',
+    '.ytp-ad-overlay-slot,',
+    '.ytp-ad-image-overlay,',
+    '.ytp-ad-overlay-container,',
+    '.ytp-suggested-action,',
+    '.ytd-watch-next-secondary-results-renderer:has(ytd-promoted-sparkles-web-renderer)',
+    '{ display: none !important; }'
+  ].join(' ');
+  function injectHideCss() {
+    if (document.querySelector('style[data-blueflame="yt-ad-hide"]')) return;
     try {
-      var skip = document.querySelector('.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern');
-      if (skip && skip.offsetParent !== null) {
-        skip.click();
-        return;
+      var style = document.createElement('style');
+      style.setAttribute('data-blueflame', 'yt-ad-hide');
+      style.textContent = HIDE_CSS;
+      (document.head || document.documentElement).appendChild(style);
+    } catch (e) { /* CSP may block; nothing else to try */ }
+  }
+
+  // In-stream ad killer. uBlock's pattern: when `.ad-showing` lands on
+  // the player container, force the underlying <video> to (duration -
+  // 0.1) muted - YouTube treats that as ad-completed and rolls the
+  // real video. Mute is critical because a 16x playback rate is still
+  // audible. Skip button click handles the few cases where YouTube's
+  // server-side decides the ad IS skippable.
+  function killAds() {
+    try {
+      var skip = document.querySelector(
+        '.ytp-ad-skip-button, .ytp-skip-ad-button, ' +
+        '.ytp-ad-skip-button-modern, .videoAdUiSkipButton'
+      );
+      if (skip) { skip.click(); }
+
+      // Dismiss text-overlay ads on mid-roll.
+      var overlayClose = document.querySelector('.ytp-ad-overlay-close-button');
+      if (overlayClose) { overlayClose.click(); }
+
+      if (document.querySelector('.ad-showing, .ytp-ad-player-overlay')) {
+        var video = document.querySelector('video.html5-main-video, .html5-video-player video');
+        if (video && isFinite(video.duration) && video.duration > 0) {
+          video.muted = true;
+          video.currentTime = Math.max(0, video.duration - 0.1);
+          if (video.paused) { video.play().catch(function(){}); }
+        }
       }
-      var player = document.querySelector('.html5-video-player.ad-showing video');
-      if (player && isFinite(player.duration) && player.duration > 0) {
-        player.currentTime = player.duration;
-        player.playbackRate = 16;
-      }
-    } catch (e) { /* DOM not ready or already torn down */ }
-  }, 300);
+    } catch (e) { /* DOM not ready or torn down */ }
+  }
+
+  // Wire MutationObserver as soon as <body> exists. Class-attribute
+  // mutations are the cheap signal that `.ad-showing` was just toggled
+  // by YouTube's player. Subtree+childList catches static promos
+  // sliding in via SPA navigation between videos.
+  function start() {
+    if (!document.body) { setTimeout(start, 10); return; }
+    injectHideCss();
+    killAds();
+    var mo = new MutationObserver(killAds);
+    mo.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class']
+    });
+    // Backstop: in case YouTube swaps out body and the observer is
+    // attached to a detached node. Cheap.
+    setInterval(killAds, 800);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
 })();
 "#;
 
