@@ -360,10 +360,13 @@ const YOUTUBE_AD_SKIP_INIT_SCRIPT_TEMPLATE: &str = r#"
   if (!/(^|\.)youtube\.com$/i.test(host)) return;
 
   // Static ad placements: masthead, in-feed promoted videos, sidebar
-  // promos, overlay banners. uBlock's curated selector list (kept in
+  // promos, overlay banners, AND the in-player interstitial companion
+  // slot that YouTube shows AFTER the video ad finishes (the static
+  // "Bring your ideas to life" / "Start now" cards with a separate
+  // Skip control - these don't toggle `.ad-showing` so the in-stream
+  // killer can't see them). uBlock's curated selector list, kept in
   // sync with the YouTube renderer custom-element names that turn
-  // over every few months). CSS-hiding these is independent of the
-  // in-stream ad logic below.
+  // over every few months.
   var HIDE_CSS = [
     '#masthead-ad,',
     '#player-ads,',
@@ -374,6 +377,7 @@ const YOUTUBE_AD_SKIP_INIT_SCRIPT_TEMPLATE: &str = r#"
     'ytd-search-pyv-renderer,',
     'ytd-ad-slot-renderer,',
     'ytd-action-companion-ad-renderer,',
+    'ytd-companion-slot-renderer,',
     'ytd-banner-promo-renderer,',
     'ytd-statement-banner-renderer,',
     'ytd-mealbar-promo-renderer,',
@@ -384,6 +388,11 @@ const YOUTUBE_AD_SKIP_INIT_SCRIPT_TEMPLATE: &str = r#"
     '.ytp-ad-overlay-slot,',
     '.ytp-ad-image-overlay,',
     '.ytp-ad-overlay-container,',
+    '.ytp-ad-text-overlay,',
+    '.ytp-ad-action-interstitial,',
+    '.ytp-ad-action-interstitial-background-container,',
+    '.ytp-ad-player-overlay,',
+    '.ytp-ad-player-overlay-flyout-cta,',
     '.ytp-suggested-action,',
     '.ytd-watch-next-secondary-results-renderer:has(ytd-promoted-sparkles-web-renderer)',
     '{ display: none !important; }'
@@ -404,13 +413,54 @@ const YOUTUBE_AD_SKIP_INIT_SCRIPT_TEMPLATE: &str = r#"
   // real video. Mute is critical because a 16x playback rate is still
   // audible. Skip button click handles the few cases where YouTube's
   // server-side decides the ad IS skippable.
+  function clickIfVisible(el) {
+    if (!el) return false;
+    // offsetParent is null for display:none; this rules out the cosmetic-
+    // hidden placements above. We still allow visibility:hidden because
+    // YouTube sometimes pre-renders Skip in that state.
+    if (el.offsetParent === null && el.style && el.style.display === 'none') return false;
+    el.click();
+    return true;
+  }
+
   function killAds() {
     try {
+      // Standard skip-ad buttons (pre-roll, mid-roll skippable).
       var skip = document.querySelector(
         '.ytp-ad-skip-button, .ytp-skip-ad-button, ' +
         '.ytp-ad-skip-button-modern, .videoAdUiSkipButton'
       );
-      if (skip) { skip.click(); }
+      if (clickIfVisible(skip)) { /* skip ack */ }
+
+      // Interstitial / companion ads (the static "Sponsored" card YouTube
+      // shows AFTER the video ad - has its own Skip control). New code
+      // path because these live outside `.ad-showing` so the in-stream
+      // fast-forward never sees them.
+      var interSkip = document.querySelector(
+        '.ytp-ad-action-interstitial-skip-button, ' +
+        '.ytp-ad-action-interstitial-skip-button-container button, ' +
+        '.ytp-ad-button[aria-label*="Skip" i]'
+      );
+      if (clickIfVisible(interSkip)) { /* interstitial dismissed */ }
+
+      // Generic fallback: any visible button inside an ad container
+      // whose accessible name contains "Skip" / "Skip Ad". Catches
+      // future selector renames YouTube ships before we update the
+      // explicit lists above.
+      var adContainer = document.querySelector(
+        '.ytp-ad-module, .ytp-ad-player-overlay, .ytp-ad-action-interstitial'
+      );
+      if (adContainer) {
+        var buttons = adContainer.querySelectorAll('button, [role="button"]');
+        for (var i = 0; i < buttons.length; i++) {
+          var b = buttons[i];
+          var label = (b.getAttribute('aria-label') || b.textContent || '').toLowerCase();
+          if (label.indexOf('skip') !== -1 && b.offsetParent !== null) {
+            b.click();
+            break;
+          }
+        }
+      }
 
       // Dismiss text-overlay ads on mid-roll.
       var overlayClose = document.querySelector('.ytp-ad-overlay-close-button');
