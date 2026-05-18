@@ -228,6 +228,32 @@ impl SearchSettings {
         Ok(())
     }
 
+    /// Whether the proxy should match every request against the loaded
+    /// filter lists (EasyList / EasyPrivacy + built-ins). Default `true`
+    /// on first launch so out-of-box experience is private. Persisted so
+    /// the user's choice survives restarts - previously the runtime
+    /// AtomicBool reset to `true` on every boot regardless of what the
+    /// user toggled in the Dashboard.
+    pub fn get_block_ads(&self) -> anyhow::Result<bool> {
+        let c = self.conn()?;
+        let mut stmt = c.prepare("select v from settings where k = 'block_ads'")?;
+        let mut rows = stmt.query([])?;
+        if let Some(row) = rows.next()? {
+            let v: String = row.get(0)?;
+            return Ok(v == "1" || v.eq_ignore_ascii_case("true"));
+        }
+        Ok(true)
+    }
+
+    pub fn set_block_ads(&self, enabled: bool) -> anyhow::Result<()> {
+        self.conn()?.execute(
+            "insert into settings (k, v) values ('block_ads', ?1)
+             on conflict(k) do update set v = excluded.v",
+            params![if enabled { "1" } else { "0" }],
+        )?;
+        Ok(())
+    }
+
     /// Last-known desktop-mode window size, snapshotted right before
     /// flipping to mobile so we can restore whatever the user was
     /// using when they flip back. Returns `None` if no snapshot

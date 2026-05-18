@@ -62,6 +62,7 @@ export function Settings() {
   const [repRefreshing, setRepRefreshing] = useState(false);
   const [lastRepRefresh, setLastRepRefresh] = useState<RefreshResult | null>(null);
   const [mobileUa, setMobileUa] = useState(false);
+  const [blockAds, setBlockAds] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ioBusy, setIoBusy] = useState(false);
   const [ioMessage, setIoMessage] = useState<string | null>(null);
@@ -81,8 +82,9 @@ export function Settings() {
       invoke<TorSettingsDto>('get_tor_settings'),
       invoke<ReputationFeed[]>('get_reputation_feeds'),
       invoke<boolean>('get_mobile_ua'),
+      invoke<boolean>('get_block_ads'),
     ]);
-    const [l, t, es, chosen, meta, torS, reps, mobUa] = results;
+    const [l, t, es, chosen, meta, torS, reps, mobUa, ads] = results;
     if (l.status === 'fulfilled') setLists(l.value);
     if (t.status === 'fulfilled') setTrust(t.value);
     if (es.status === 'fulfilled') setEngines(es.value);
@@ -91,10 +93,24 @@ export function Settings() {
     if (torS.status === 'fulfilled') setTor(torS.value);
     if (reps.status === 'fulfilled') setRepFeeds(reps.value);
     if (mobUa.status === 'fulfilled') setMobileUa(mobUa.value);
+    if (ads.status === 'fulfilled') setBlockAds(ads.value);
     const first = results.find((r) => r.status === 'rejected') as
       | PromiseRejectedResult
       | undefined;
     setError(first ? String(first.reason) : null);
+  }
+
+  async function onBlockAdsToggle(next: boolean) {
+    // Optimistic: flip the local state first so the checkbox feels
+    // instant. If the invoke fails, revert + surface the error.
+    setBlockAds(next);
+    setError(null);
+    try {
+      await invoke('set_block_ads', { enabled: next });
+    } catch (e) {
+      setBlockAds(!next);
+      setError(String(e));
+    }
   }
 
   async function onBrowserModeChange(next: boolean) {
@@ -371,6 +387,23 @@ export function Settings() {
             {refreshing ? `${spinner} refreshing` : 'refresh now'}
           </button>
         </div>
+
+        <label className="meta-toggle">
+          <input
+            type="checkbox"
+            checked={blockAds}
+            onChange={(e) => onBlockAdsToggle(e.currentTarget.checked)}
+          />
+          <span>
+            <strong>block ads &amp; trackers</strong>
+            <small>
+              Master switch for the MITM proxy's filter engine. When on, every request
+              is matched against the loaded lists (EasyList, EasyPrivacy, custom rules
+              below) and blocked on hit. Disabling lets every request through unchanged.
+              Persisted across restarts; mirrors the toolbar quick-toggle.
+            </small>
+          </span>
+        </label>
 
         {lastRefresh && (
           <div className="panel-note">
