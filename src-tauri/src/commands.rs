@@ -321,14 +321,21 @@ pub async fn set_mobile_ua(app: tauri::AppHandle, mobile: bool) -> Result<(), St
         .set_mobile_ua(mobile)
         .map_err(|e| format!("set: {e}"))?;
 
+    // Resize the window BEFORE rebuilding tabs. open_tab_impl uses
+    // active_tab_bounds() which reads main.inner_size(), so if we
+    // rebuild first the new webviews get positioned against the
+    // old (pre-resize) window dimensions - then only the active tab
+    // gets fixed up by the subsequent Resized event, leaving every
+    // inactive tab mis-sized until the user switches to it.
+    //
+    // This also fixes the Mobile -> Desktop flip on Windows where
+    // the WindowEvent::Resized would sometimes not fire (or fire with
+    // the still-clipped mobile size), so the rebuilt active tab stayed
+    // anchored at mobile bounds inside a now-desktop-sized window.
+    crate::browser::apply_window_size_for_mode(&app, mobile);
     // Rebuild existing tabs in place so the user doesn't need to
     // close + reopen each one manually for the change to take effect.
     crate::browser::rebuild_all_tabs(&app).await?;
-    // Resize the whole window to a phone-shaped portrait (mobile) or
-    // back to the desktop default - the webview is already narrow +
-    // centered via active_tab_bounds, but the surrounding OS window
-    // staying desktop-sized looked wrong around it.
-    crate::browser::apply_window_size_for_mode(&app, mobile);
     Ok(())
 }
 

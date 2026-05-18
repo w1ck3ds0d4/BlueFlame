@@ -1540,16 +1540,26 @@ const DESKTOP_WINDOW_HEIGHT: f64 = 760.0;
 
 /// Resize the main window to match the selected browser mode AND
 /// flip `resizable` so the shape is locked while mobile, free while
-/// desktop. Called from `set_mobile_ua` after the tab rebuild.
+/// desktop. Called from `set_mobile_ua` BEFORE the tab rebuild so
+/// the rebuild's `add_child` calls position webviews against the new
+/// window size on the first pass.
 ///
-/// Mobile path: snapshot the current window size (if it isn't
-/// already the mobile lock - avoids overwriting a good snapshot with
-/// a stale mobile lock), then force 480 x 900 and
-/// `set_resizable(false)`.
+/// Mobile path: snapshot the current desktop size (skip if the current
+/// dimensions already look like mobile, to avoid overwriting a good
+/// snapshot with a stale mobile lock), unlock resizable so set_size is
+/// not clipped, resize to 480 x 900, then lock resizable.
 ///
 /// Desktop path: read the saved snapshot (or fall back to defaults),
-/// `set_resizable(true)` first so the set_size isn't clamped by a
-/// stale min/max, then restore.
+/// unlock resizable first, resize, then leave resizable on. Doing the
+/// resize BEFORE flipping resizable matters on Windows: SetWindowPos
+/// triggered by set_resizable can clamp a subsequent set_size against
+/// the current client area, so set_size needs to happen while the
+/// frame is in its most permissive state.
+///
+/// `resync_layout` is invoked at the end in either direction so the
+/// active webview lines up with whatever the platform actually
+/// applied, defending against Windows occasionally not firing
+/// WindowEvent::Resized for programmatic size changes.
 pub fn apply_window_size_for_mode(app: &tauri::AppHandle, mobile: bool) {
     let Some(main) = app.get_window("main") else {
         return;
@@ -1580,6 +1590,11 @@ pub fn apply_window_size_for_mode(app: &tauri::AppHandle, mobile: bool) {
                 }
             }
         }
+        // Unlock first so set_size isn't clipped by a stale frame
+        // state, resize, then re-lock for the mobile UX.
+        if let Err(e) = main.set_resizable(true) {
+            tracing::warn!(error = %e, "failed to unlock main window before mobile resize");
+        }
         if let Err(e) = main.set_size(LogicalSize::new(MOBILE_WINDOW_WIDTH, MOBILE_WINDOW_HEIGHT)) {
             tracing::warn!(error = %e, "failed to resize main window to mobile");
         }
@@ -1587,8 +1602,9 @@ pub fn apply_window_size_for_mode(app: &tauri::AppHandle, mobile: bool) {
             tracing::warn!(error = %e, "failed to lock main window in mobile mode");
         }
     } else {
-        // Restore desktop. Flip resizable FIRST so the subsequent
-        // set_size isn't constrained by the mobile-mode min/max.
+        // Restore desktop. Order is important on Windows: unlock
+        // resizable first so the subsequent set_size grows past the
+        // mobile client area, then perform the resize.
         if let Err(e) = main.set_resizable(true) {
             tracing::warn!(error = %e, "failed to unlock main window on desktop flip");
         }
@@ -1600,6 +1616,13 @@ pub fn apply_window_size_for_mode(app: &tauri::AppHandle, mobile: bool) {
             tracing::warn!(error = %e, "failed to restore desktop window size");
         }
     }
+
+    // Force the active webview to match the new window bounds.
+    // Tauri normally does this through WindowEvent::Resized -> resync_layout,
+    // but on Windows the event is occasionally missing for programmatic
+    // resizes, which is exactly what wedged the mobile -> desktop flip
+    // (window grew but the webview stayed at mobile bounds).
+    resync_layout(app);
 }
 
 /// Position + size the active tab's webview should occupy, given the
