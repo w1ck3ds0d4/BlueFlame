@@ -384,7 +384,12 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-.url-trust-idle {
+/* Compound `.url-trust.url-trust-<label>` selectors below give these
+   rules specificity (0,0,2,0), so they win over `.nav-icon` (which is
+   declared further down the file with the same single-class specificity
+   and would otherwise overwrite our background back to `transparent`
+   and text color back to `--text-dim` via the cascade). */
+.url-trust.url-trust-idle {
   color: var(--text-muted);
   background: transparent;
   border-color: var(--border-strong);
@@ -393,25 +398,25 @@ button {
 /* Filled backgrounds per label so the score reads at a glance. Dark
    text on bright ok / warn / trusted tints; white on the red danger
    tint where dark text loses contrast. */
-.url-trust-trusted {
+.url-trust.url-trust-trusted {
   color: #07140b;
   background: var(--ok);
   border-color: var(--ok);
 }
 
-.url-trust-ok {
+.url-trust.url-trust-ok {
   color: #0e1a07;
   background: var(--ok-mid);
   border-color: var(--ok-mid);
 }
 
-.url-trust-suspect {
+.url-trust.url-trust-suspect {
   color: #1a1000;
   background: var(--warn);
   border-color: var(--warn);
 }
 
-.url-trust-danger {
+.url-trust.url-trust-danger {
   color: #fff;
   background: var(--danger);
   border-color: var(--danger);
@@ -419,11 +424,12 @@ button {
 
 /* Hover: slightly brighter shade of the same hue so the click
    affordance stays on-theme. Overrides the generic .nav-icon:hover
-   rule which would otherwise flip the accent color. */
-.url-trust-trusted:hover:not(:disabled),
-.url-trust-ok:hover:not(:disabled),
-.url-trust-suspect:hover:not(:disabled),
-.url-trust-danger:hover:not(:disabled) {
+   rule which would otherwise flip the accent color. Compound selector
+   keeps specificity above `.nav-icon:hover`. */
+.url-trust.url-trust-trusted:hover:not(:disabled),
+.url-trust.url-trust-ok:hover:not(:disabled),
+.url-trust.url-trust-suspect:hover:not(:disabled),
+.url-trust.url-trust-danger:hover:not(:disabled) {
   filter: brightness(1.1);
 }
 
