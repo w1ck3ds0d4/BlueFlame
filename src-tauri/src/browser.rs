@@ -341,6 +341,63 @@ const MOBILE_INIT_SCRIPT: &str = r#"
 })();
 "#;
 
+/// YouTube content-script: hides static ad placements via CSS, auto-
+/// clicks "Skip Ad", and fast-forwards unskippable in-stream ads. URL
+/// filtering can't catch YouTube ads because the ad video is served
+/// from the same googlevideo.com hostnames as the actual video, so the
+/// only reliable handle is the DOM (the same approach uBlock Origin
+/// uses for YouTube). The `__BF_BLOCK_ADS__` placeholder is replaced
+/// at tab creation time so disabling the master switch in Settings
+/// gives the user back the original page on the next tab refresh.
+const YOUTUBE_AD_SKIP_INIT_SCRIPT_TEMPLATE: &str = r#"
+(function() {
+  if (!__BF_BLOCK_ADS__) return;
+  // Match youtube.com, www.youtube.com, m.youtube.com, music.youtube.com.
+  // Anything else is a no-op so this script is safe to inject globally.
+  var host = location.hostname || '';
+  if (!/(^|\.)youtube\.com$/i.test(host)) return;
+
+  // Static ad placements: masthead, in-feed promoted videos, sidebar
+  // promos, overlay banners. CSS keeps them out of the DOM-render path
+  // without us having to chase every YouTube rerender.
+  try {
+    var style = document.createElement('style');
+    style.setAttribute('data-blueflame', 'yt-ad-hide');
+    style.textContent = [
+      '.ytp-ad-overlay-slot, .ytp-ad-image-overlay, .ytp-ad-overlay-container,',
+      'ytd-display-ad-renderer, ytd-promoted-sparkles-web-renderer,',
+      'ytd-banner-promo-renderer, ytd-statement-banner-renderer,',
+      'ytd-mealbar-promo-renderer, ytd-ad-slot-renderer,',
+      'ytd-promoted-video-renderer, ytd-in-feed-ad-layout-renderer,',
+      'ytd-rich-item-renderer:has(ytd-ad-slot-renderer),',
+      'ytd-rich-item-renderer:has(ytd-display-ad-renderer),',
+      '#masthead-ad, #player-ads, ytd-action-companion-ad-renderer',
+      '{ display: none !important; }'
+    ].join(' ');
+    (document.head || document.documentElement).appendChild(style);
+  } catch (e) { /* page CSP may block style insert; nothing else to try */ }
+
+  // In-stream video ads: poll the player ~3x/sec. Cheap (one query,
+  // one possible click). YouTube cycles ad slots in the same <video>
+  // element as the real content, so we drive currentTime to the end
+  // and crank playbackRate to chew through any seek-locked frames.
+  setInterval(function() {
+    try {
+      var skip = document.querySelector('.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern');
+      if (skip && skip.offsetParent !== null) {
+        skip.click();
+        return;
+      }
+      var player = document.querySelector('.html5-video-player.ad-showing video');
+      if (player && isFinite(player.duration) && player.duration > 0) {
+        player.currentTime = player.duration;
+        player.playbackRate = 16;
+      }
+    } catch (e) { /* DOM not ready or already torn down */ }
+  }, 300);
+})();
+"#;
+
 fn tab_label(id: u64) -> String {
     format!("browse-{id}")
 }
@@ -636,6 +693,18 @@ async fn open_tab_impl(
                 let token = crate::context_menu::current_token(&app_clone);
                 let ctx_script = CONTEXT_MENU_INIT_SCRIPT_TEMPLATE.replace("__BF_TOKEN__", &token);
                 b = b.initialization_script(ctx_script);
+                // YouTube ad-skip + cosmetic hide. Gated by the master
+                // "block ads & trackers" toggle from Settings - flipping
+                // it takes effect on the next page load since the
+                // injected script captures the value at init time.
+                let block_flag = if block_ads_enabled(&app_clone) {
+                    "true"
+                } else {
+                    "false"
+                };
+                let yt_script = YOUTUBE_AD_SKIP_INIT_SCRIPT_TEMPLATE
+                    .replace("__BF_BLOCK_ADS__", block_flag);
+                b = b.initialization_script(yt_script);
                 // macOS: route tab traffic through the local MITM
                 // proxy via per-webview proxy_url. Windows + Linux
                 // pick this up from the env vars set before any
@@ -1526,6 +1595,20 @@ fn mobile_ua_enabled(app: &tauri::AppHandle) -> bool {
     match SearchSettings::open(&data) {
         Ok(settings) => settings.get_mobile_ua().unwrap_or(false),
         Err(_) => false,
+    }
+}
+
+/// Read the persisted master ad-block switch. Falls back to `true` when
+/// the settings DB is unreadable so the safer default wins. Used to
+/// gate the YouTube ad-skip content script at tab creation time -
+/// flipping the toggle in Settings takes effect on the next page load.
+fn block_ads_enabled(app: &tauri::AppHandle) -> bool {
+    let Ok(data) = app.path().app_data_dir() else {
+        return true;
+    };
+    match SearchSettings::open(&data) {
+        Ok(settings) => settings.get_block_ads().unwrap_or(true),
+        Err(_) => true,
     }
 }
 
