@@ -16,6 +16,11 @@
   --danger: #ff4a5c;
   --warn: #ffb347;
   --ok: #44dd77;
+  /* Mid-trust tier (score 51-80). Sits between --warn (orange) and --ok
+     (green) on the severity gradient so the trust score reads as one
+     continuous scale. Previously this tier used --accent (cyan), which
+     looked like the app's brand color instead of a severity signal. */
+  --ok-mid: #aadd55;
   --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --body: var(--mono);
   --display: var(--mono);
@@ -395,9 +400,9 @@ button {
 }
 
 .url-trust-ok {
-  color: #00131f;
-  background: var(--accent);
-  border-color: var(--accent);
+  color: #0e1a07;
+  background: var(--ok-mid);
+  border-color: var(--ok-mid);
 }
 
 .url-trust-suspect {
