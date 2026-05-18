@@ -42,13 +42,14 @@ use browser::{
 use commands::{
     bookmark_delete_folder, bookmark_folders, bookmark_is, bookmark_list, bookmark_rename_folder,
     bookmark_set_folder, bookmark_toggle, clear_block_log, clear_debug_log, disable_filters,
-    enable_filters, get_blocks_for_host, get_ca_cert_path, get_ca_trust_status, get_debug_log,
-    get_favicon, get_filter_lists, get_metasearch_enabled, get_mobile_ua, get_proxy_status,
-    get_recent_blocks, get_reputation_feeds, get_search_engine, get_stats, get_system_summary,
-    get_tor_settings, get_trust, get_trust_history, install_ca, list_search_engines,
-    log_from_frontend, personal_clear_history, personal_recent, personal_search,
-    personal_top_visited, refresh_filter_lists, refresh_reputation_feeds, reset_stats, reveal_ca,
-    set_metasearch_enabled, set_mobile_ua, set_search_engine, set_tor_settings, url_suggest,
+    enable_filters, get_block_ads, get_blocks_for_host, get_ca_cert_path, get_ca_trust_status,
+    get_debug_log, get_favicon, get_filter_lists, get_metasearch_enabled, get_mobile_ua,
+    get_proxy_status, get_recent_blocks, get_reputation_feeds, get_search_engine, get_stats,
+    get_system_summary, get_tor_settings, get_trust, get_trust_history, install_ca,
+    list_search_engines, log_from_frontend, personal_clear_history, personal_recent,
+    personal_search, personal_top_visited, refresh_filter_lists, refresh_reputation_feeds,
+    reset_stats, reveal_ca, set_block_ads, set_metasearch_enabled, set_mobile_ua,
+    set_search_engine, set_tor_settings, url_suggest,
 };
 use context_menu::{
     close_context_menu, hide_context_menu, show_context_menu, submit_tab_event,
@@ -272,6 +273,8 @@ pub fn run() {
             set_metasearch_enabled,
             get_mobile_ua,
             set_mobile_ua,
+            get_block_ads,
+            set_block_ads,
             personal_search,
             personal_recent,
             personal_clear_history,
@@ -386,6 +389,19 @@ async fn start_proxy_at_boot(
             s.security.clone(),
         )
     };
+
+    // Seed the runtime AtomicBool from the persisted user preference so
+    // a Dashboard / Settings toggle survives across restarts. Default is
+    // true (block on) for fresh installs; the AtomicBool already starts
+    // at true, so a corrupt / unreadable settings DB falls back to
+    // blocking on.
+    match crate::search::SearchSettings::open(&data_dir) {
+        Ok(settings) => match settings.get_block_ads() {
+            Ok(enabled) => filters_enabled.store(enabled, std::sync::atomic::Ordering::Relaxed),
+            Err(e) => tracing::warn!(error = %e, "boot: read block_ads failed - defaulting to on"),
+        },
+        Err(e) => tracing::warn!(error = %e, "boot: open settings failed - defaulting to on"),
+    }
 
     let (upstream, upstream_applied) = resolve_upstream(&data_dir, &proxy_state).await;
 

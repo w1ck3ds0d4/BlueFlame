@@ -35,17 +35,71 @@ pub async fn get_proxy_status(state: State<'_>) -> Result<ProxyStatus, String> {
     })
 }
 
+/// Persist `block_ads` to SQLite so the change survives restart. The
+/// callers below (`enable_filters` / `disable_filters` from the toolbar
+/// and `set_block_ads` from Settings) all funnel through this so there's
+/// one place that knows about the storage key. Errors are logged but
+/// not propagated - the runtime AtomicBool change is the visible effect.
+fn persist_block_ads(app: &tauri::AppHandle, enabled: bool) {
+    let Ok(data) = app.path().app_data_dir() else {
+        tracing::warn!("persist_block_ads: app_data_dir unavailable");
+        return;
+    };
+    match crate::search::SearchSettings::open(&data) {
+        Ok(settings) => {
+            if let Err(e) = settings.set_block_ads(enabled) {
+                tracing::warn!(error = %e, "persist_block_ads: write failed");
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "persist_block_ads: open settings failed"),
+    }
+}
+
 #[tauri::command]
-pub async fn enable_filters(state: State<'_>) -> Result<(), String> {
-    let s = state.lock().await;
-    s.filters_enabled.store(true, Ordering::Relaxed);
+pub async fn enable_filters(app: tauri::AppHandle, state: State<'_>) -> Result<(), String> {
+    {
+        let s = state.lock().await;
+        s.filters_enabled.store(true, Ordering::Relaxed);
+    }
+    persist_block_ads(&app, true);
     Ok(())
 }
 
 #[tauri::command]
-pub async fn disable_filters(state: State<'_>) -> Result<(), String> {
-    let s = state.lock().await;
-    s.filters_enabled.store(false, Ordering::Relaxed);
+pub async fn disable_filters(app: tauri::AppHandle, state: State<'_>) -> Result<(), String> {
+    {
+        let s = state.lock().await;
+        s.filters_enabled.store(false, Ordering::Relaxed);
+    }
+    persist_block_ads(&app, false);
+    Ok(())
+}
+
+/// Settings-facing accessors with a more user-friendly name. The
+/// Dashboard quick-toggle still uses `enable_filters` / `disable_filters`;
+/// both pairs persist through the same storage key so they stay in sync.
+#[tauri::command]
+pub async fn get_block_ads(app: tauri::AppHandle) -> Result<bool, String> {
+    let data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app data dir: {e}"))?;
+    let settings =
+        crate::search::SearchSettings::open(&data).map_err(|e| format!("open settings: {e}"))?;
+    settings.get_block_ads().map_err(|e| format!("get: {e}"))
+}
+
+#[tauri::command]
+pub async fn set_block_ads(
+    app: tauri::AppHandle,
+    state: State<'_>,
+    enabled: bool,
+) -> Result<(), String> {
+    {
+        let s = state.lock().await;
+        s.filters_enabled.store(enabled, Ordering::Relaxed);
+    }
+    persist_block_ads(&app, enabled);
     Ok(())
 }
 
