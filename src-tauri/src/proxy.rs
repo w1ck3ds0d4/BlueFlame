@@ -762,12 +762,16 @@ pub async fn start(
     app_handle: tauri::AppHandle,
     downloads_log: crate::downloads::SharedDownloadsLog,
 ) -> anyhow::Result<ProxyRunner> {
-    let cert_params = ca.cert_params().context("building CA params for proxy")?;
-    let cert = cert_params
-        .self_signed(&ca.key_pair)
-        .context("self-signing CA for proxy")?;
-
-    let authority = RcgenAuthority::new(ca.key_pair, cert, 1_000);
+    // hudsucker 0.24 needs an `Issuer` (parsed CA cert + key) plus a
+    // `CryptoProvider`. We share the process-wide `ring` provider
+    // installed at startup in `lib.rs::run` so every rustls user in the
+    // binary agrees on the same crypto backend.
+    let issuer = ca.into_issuer().context("building CA issuer for proxy")?;
+    let authority = RcgenAuthority::new(
+        issuer,
+        1_000,
+        hudsucker::rustls::crypto::ring::default_provider(),
+    );
 
     let handler = BlueFlameHandler {
         filters: filters.clone(),
@@ -804,18 +808,22 @@ pub async fn start(
                 .https_or_http()
                 .enable_http1()
                 .wrap_connector(crate::socks_connector::Socks5Connector::new(socks));
-            let client: Client<_, hudsucker::Body> = Client::builder(TokioExecutor::new())
-                .http1_title_case_headers(true)
-                .http1_preserve_header_case(true)
-                .build(https);
+            let client_builder = {
+                let mut b = Client::builder(TokioExecutor::new());
+                b.http1_title_case_headers(true)
+                    .http1_preserve_header_case(true);
+                b
+            };
             let proxy = builder
-                .with_client(client)
                 .with_ca(authority)
+                .with_http_connector(https)
+                .with_client(client_builder)
                 .with_http_handler(handler)
                 .with_graceful_shutdown(async {
                     let _ = shutdown_rx.await;
                 })
-                .build();
+                .build()
+                .context("building hudsucker proxy (socks5)")?;
             tokio::spawn(async move {
                 if let Err(e) = proxy.start().await {
                     tracing::error!(error = ?e, "proxy task exited with error");
@@ -830,18 +838,22 @@ pub async fn start(
                 .https_or_http()
                 .enable_http1()
                 .wrap_connector(crate::embedded_tor::TorBuiltInConnector::new(tor));
-            let client: Client<_, hudsucker::Body> = Client::builder(TokioExecutor::new())
-                .http1_title_case_headers(true)
-                .http1_preserve_header_case(true)
-                .build(https);
+            let client_builder = {
+                let mut b = Client::builder(TokioExecutor::new());
+                b.http1_title_case_headers(true)
+                    .http1_preserve_header_case(true);
+                b
+            };
             let proxy = builder
-                .with_client(client)
                 .with_ca(authority)
+                .with_http_connector(https)
+                .with_client(client_builder)
                 .with_http_handler(handler)
                 .with_graceful_shutdown(async {
                     let _ = shutdown_rx.await;
                 })
-                .build();
+                .build()
+                .context("building hudsucker proxy (tor)")?;
             tokio::spawn(async move {
                 if let Err(e) = proxy.start().await {
                     tracing::error!(error = ?e, "proxy task exited with error");
@@ -859,18 +871,22 @@ pub async fn start(
                 .https_or_http()
                 .enable_http1()
                 .wrap_connector(http);
-            let client: Client<_, hudsucker::Body> = Client::builder(TokioExecutor::new())
-                .http1_title_case_headers(true)
-                .http1_preserve_header_case(true)
-                .build(https);
+            let client_builder = {
+                let mut b = Client::builder(TokioExecutor::new());
+                b.http1_title_case_headers(true)
+                    .http1_preserve_header_case(true);
+                b
+            };
             let proxy = builder
-                .with_client(client)
                 .with_ca(authority)
+                .with_http_connector(https)
+                .with_client(client_builder)
                 .with_http_handler(handler)
                 .with_graceful_shutdown(async {
                     let _ = shutdown_rx.await;
                 })
-                .build();
+                .build()
+                .context("building hudsucker proxy (direct)")?;
             tokio::spawn(async move {
                 if let Err(e) = proxy.start().await {
                     tracing::error!(error = ?e, "proxy task exited with error");

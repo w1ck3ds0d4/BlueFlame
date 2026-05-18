@@ -39,8 +39,11 @@ tower-service = "0.3"
 arti-client = { version = "0.41", default-features = false, features = ["tokio", "rustls"], optional = true }
 tor-rtcompat = { version = "0.41", default-features = false, features = ["tokio", "rustls"], optional = true }
 
-# TLS and CA cert generation
-rcgen = "0.13"
+# TLS and CA cert generation. Pinned to 0.14 so we share the same rcgen
+# major as hudsucker's transitive dep - otherwise `KeyPair` and `Issuer`
+# types are duplicated across crate versions and the proxy builder
+# refuses our values.
+rcgen = "0.14"
 rustls = "0.23"
 rustls-pemfile = "2"
 # Parse upstream-server certificates for trust-score signals (issuer,

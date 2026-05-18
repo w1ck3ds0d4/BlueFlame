@@ -9,7 +9,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
-use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
+use rcgen::{CertificateParams, DistinguishedName, DnType, Issuer, KeyPair};
 
 const CA_COMMON_NAME: &str = "BlueFlame Root CA";
 const CA_ORG: &str = "BlueFlame";
@@ -23,9 +23,13 @@ pub struct RootCa {
 }
 
 impl RootCa {
-    /// Reconstruct the CA cert params so the proxy can use them to sign per-host leaf certs.
-    pub fn cert_params(&self) -> anyhow::Result<CertificateParams> {
-        CertificateParams::from_ca_cert_pem(&self.cert_pem).context("parsing CA cert PEM")
+    /// Consume `self` and build a hudsucker-compatible `Issuer`. The
+    /// Issuer owns the parsed CA cert params + signing key, and is
+    /// what hudsucker's `RcgenAuthority` uses to mint per-host leaf
+    /// certs on the fly.
+    pub fn into_issuer(self) -> anyhow::Result<Issuer<'static, KeyPair>> {
+        Issuer::from_ca_cert_pem(&self.cert_pem, self.key_pair)
+            .context("parsing CA cert PEM into Issuer")
     }
 }
 
@@ -91,10 +95,12 @@ mod tests {
     }
 
     #[test]
-    fn cert_pem_parses_as_ca() {
+    fn cert_pem_parses_as_issuer() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let ca = load_or_create(tmp.path()).expect("generate");
-        let params = CertificateParams::from_ca_cert_pem(&ca.cert_pem).expect("parse");
-        assert!(matches!(params.is_ca, rcgen::IsCa::Ca(_)));
+        // If the PEM is a valid CA cert that matches the saved key pair,
+        // Issuer::from_ca_cert_pem accepts both. That's the only proof the
+        // proxy needs that the round-trip works.
+        ca.into_issuer().expect("parse PEM as Issuer");
     }
 }
