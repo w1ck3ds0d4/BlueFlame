@@ -1,6 +1,6 @@
 [package]
 name = "blueflame"
-version = "0.1.0"
+version = "0.2.0"
 description = "BlueFlame - privacy-first browser shell with embedded MITM filter proxy"
 authors = ["w1ck3ds0d4 <daniel.svs@outlook.com>"]
 edition = "2021"

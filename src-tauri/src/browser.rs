@@ -809,8 +809,8 @@ async fn open_tab_impl(
                 } else {
                     "false"
                 };
-                let yt_script = YOUTUBE_AD_SKIP_INIT_SCRIPT_TEMPLATE
-                    .replace("__BF_BLOCK_ADS__", block_flag);
+                let yt_script =
+                    YOUTUBE_AD_SKIP_INIT_SCRIPT_TEMPLATE.replace("__BF_BLOCK_ADS__", block_flag);
                 b = b.initialization_script(yt_script);
                 // macOS: route tab traffic through the local MITM
                 // proxy via per-webview proxy_url. Windows + Linux
