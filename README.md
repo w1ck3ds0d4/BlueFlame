@@ -1,4 +1,6 @@
-# BlueFlame
+<p align="center">
+  <img src="assets/banner.svg" alt="BlueFlame" />
+</p>
 
 Privacy-first browser shell. On desktop, an embedded MITM filter proxy strips trackers and analytics at the network layer. On Android, the same filter rules run via WebView's native `shouldInterceptRequest` hook - no proxy, no CA trust needed. iOS will follow via `WKContentRuleList` once a Mac is available for the build.
 
