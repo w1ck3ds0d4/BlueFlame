@@ -87,7 +87,7 @@ function collectIdentitySignals(): IdentitySignals {
       canvasHash = fnv1aHex(c.toDataURL());
     }
   } catch {
-    /* canvas disabled / blocked — leave as n/a */
+    /* canvas disabled / blocked - leave as n/a */
   }
 
   let webglRenderer = 'n/a';
@@ -111,7 +111,7 @@ function collectIdentitySignals(): IdentitySignals {
   try {
     timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown';
   } catch {
-    /* Intl broken — keep default */
+    /* Intl broken - keep default */
   }
 
   const dpr = window.devicePixelRatio || 1;
