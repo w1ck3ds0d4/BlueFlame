@@ -7,6 +7,17 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
+    groups:
+      tauri-apps:
+        patterns:
+          - "@tauri-apps/*"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+          - "@vitejs/plugin-react"
 
   - package-ecosystem: "cargo"
     directory: "/src-tauri"
@@ -15,6 +26,17 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    groups:
+      tauri:
+        patterns:
+          - "tauri"
+          - "tauri-build"
+          - "tauri-plugin-*"
+      arti:
+        patterns:
+          - "arti-client"
+          - "tor-rtcompat"
+          - "tor-*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
