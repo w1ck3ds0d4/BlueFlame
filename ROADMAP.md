@@ -92,7 +92,7 @@ No CI or test suite exists in tree.
 
 ## Out of scope for v1
 
-- Sync across devices (no telemetry, no cloud — by design)
+- Sync across devices (no telemetry, no cloud - by design)
 - Browser extension / WebExtension support
 - Any telemetry pipeline or analytics
 - Replacing the regex-based filter engine with a full ad-block engine (compaction work is post-v1)
