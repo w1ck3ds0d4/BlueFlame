@@ -195,5 +195,5 @@ BlueFlame/
 
 This project is dual-licensed:
 
-- **[AGPL v3](LICENSE)** - free for open-source use. Derivatives and SaaS deployments must release their source under AGPL.
-- **[Commercial license](COMMERCIAL.md)** - for proprietary / closed-source use or hosted services that do not want to comply with AGPL source-disclosure requirements. Contact for terms.
+AGPL v3 - free for open-source use. Derivatives and SaaS deployments must release their source under AGPL.
+Commercial license - for proprietary / closed-source use or hosted services that do not want to comply with AGPL source-disclosure requirements. Contact for terms.
