@@ -42,9 +42,11 @@ pub async fn bootstrap(data_dir: &Path) -> anyhow::Result<SharedTor> {
     let cfg = builder.build()?;
 
     tracing::info!("arti: bootstrapping (this can take up to ~30s on first run)");
+    // `create_bootstrapped` already returns an `Arc<TorClient<_>>` (= SharedTor), so return it
+    // directly - wrapping it in another `Arc::new` double-wraps and fails to type-check.
     let client = TorClient::create_bootstrapped(cfg).await?;
     tracing::info!("arti: bootstrapped");
-    Ok(Arc::new(client))
+    Ok(client)
 }
 
 /// `tower::Service<Uri>` that dials its target through the embedded
