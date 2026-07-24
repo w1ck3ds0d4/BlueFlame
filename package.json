@@ -13,7 +13,7 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "lucide-react": "^1.17.0",
-    "preact": "^10.29.2"
+    "preact": "^10.29.3"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.2",
