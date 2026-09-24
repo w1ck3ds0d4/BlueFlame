@@ -4,8 +4,6 @@
 
 Privacy-first browser shell. On desktop, an embedded MITM filter proxy strips trackers and analytics at the network layer. On Android, the same filter rules run via WebView's native `shouldInterceptRequest` hook - no proxy, no CA trust needed. iOS will follow via `WKContentRuleList` once a Mac is available for the build.
 
----
-
 ## Features
 
 ### Privacy + filtering
@@ -36,8 +34,6 @@ Privacy-first browser shell. On desktop, an embedded MITM filter proxy strips tr
 - **Privacy dashboard** - live counter of requests total, requests blocked, bytes saved
 - **Block log** - per-request view of what the proxy stripped, in real time
 - **No telemetry** - BlueFlame itself phones home to nothing; the only network traffic is what you browse
-
----
 
 ## Setup
 
@@ -89,8 +85,6 @@ pnpm tauri android build  # produces APK/AAB in src-tauri/gen/android/app/build/
 
 The Android build uses `WebView.shouldInterceptRequest` directly - no proxy, no CA trust step. Filters match the desktop built-in set.
 
----
-
 ## Usage
 
 ### Start the proxy
@@ -125,9 +119,7 @@ Failures (bad HTTP, malformed lines, invalid regex) are logged and skipped - a s
 
 Invoke the `refresh_filter_lists` Tauri command (or, later, click Refresh in Settings) to re-download on demand. The command returns `{ lists_ok, lists_failed, patterns_active }`.
 
----
-
-## Project Structure
+## Project structure
 
 ```
 BlueFlame/
@@ -188,8 +180,6 @@ BlueFlame/
   COMMERCIAL.md                         Commercial license terms
   README.md
 ```
-
----
 
 ## License
 
