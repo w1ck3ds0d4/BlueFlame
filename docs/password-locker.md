@@ -60,34 +60,56 @@ firmware, bootloader, and OS files were measured at boot), so if any of those ch
 BIOS update, the key becomes permanently unreadable. The other just asks the TPM to hold a key
 and gate its use behind a policy such as "the user must present Windows Hello," with no
 dependency on boot measurements. This design uses the second kind only. Daniel can update his
-BIOS and the key keeps working, because Windows Hello for Apps and the CNG APIs used here (see
-below) create policy bound keys, not measurement bound ones, by default; the design deliberately
-avoids the platform attestation properties that would add measurement binding.
+BIOS and the key keeps working, because the CNG NCrypt APIs used here (see below) create policy
+bound keys, not measurement bound ones, by default; the design deliberately avoids the platform
+attestation properties that would add measurement binding.
 
 ## How unlock works
 
-1. BlueFlame asks Windows to create (on first setup) or use (on every later unlock) a TPM backed
-   asymmetric key tied to Daniel's Windows Hello enrollment. This is the same mechanism apps use
-   for "sign in with Windows Hello."
-2. Windows Hello prompts Daniel for face, fingerprint, or PIN. This is a Windows system prompt,
-   not something BlueFlame draws itself, so it cannot be faked by a webpage or by page script.
-3. On success, BlueFlame uses that key to sign a fixed, locker specific challenge string. The
-   signature is deterministic for a given key and challenge, so the same signature comes back
-   every time Daniel unlocks successfully.
-4. That signature is fed through HKDF (a standard key derivation function) to produce a symmetric
-   key encryption key, the KEK.
-5. The KEK unwraps the real data key, an AES-256-GCM key, which is held in memory only, never
-   written to disk unwrapped.
-6. The data key decrypts locker entries on demand, one at a time, for as long as the locker
-   stays unlocked.
-7. A short auto-lock timer (a few minutes of no locker activity, configurable) zeroes the data
-   key out of memory and returns to the locked state. Reaching for a saved password after that
-   needs a fresh Windows Hello gesture.
+An earlier draft of this design derived the key encryption key (the KEK) from a TPM signature,
+on the idea that the same key signing the same fixed challenge would always produce the same
+signature. That is wrong for the key type this design needs. Windows Hello for Apps
+(`KeyCredentialManager`) creates ECDSA P-256 keys on a TPM 2.0 machine, and TPM 2.0's ECDSA
+signing operation uses a randomized per-signature nonce, not the deterministic nonce scheme from
+RFC 6979. Two signatures over the same challenge with the same key are both valid but are not
+the same bytes. Deriving the KEK from the signature would therefore produce a different KEK on
+most unlocks, and the wrapped data key would fail to unwrap starting with the second one. The
+design below replaces that step with direct TPM wrap and unwrap, which has no such problem.
 
-Using a signature as the source of the KEK, rather than asking the TPM key to decrypt directly,
-is a deliberate choice: Windows Hello for Apps keys are built around signing, so this avoids
-depending on decrypt support that is not guaranteed to exist on the same key type, while still
-gating every use behind a hardware backed, non-exportable key and a live Hello prompt.
+1. At setup, BlueFlame asks Windows to create a TPM backed RSA key through the CNG NCrypt API
+   against the Microsoft Platform Crypto Provider (not through `KeyCredentialManager`, which
+   only supports signing and cannot decrypt). The key is created non-exportable, marked for
+   decrypt, and given an `NCRYPT_UI_POLICY` with the "force high protection" flag, so Windows
+   itself gates every private key use behind a Windows Hello prompt.
+2. BlueFlame generates a random AES-256-GCM data key with `OsRng` and wraps it by encrypting it
+   directly with the TPM key's RSA public half, using RSA-OAEP (SHA-256). This wrapped blob is
+   `wrapped_data_key_tpm`; it needs no separate KEK derivation step, because the TPM key itself
+   is the wrapping key.
+3. On every later unlock, BlueFlame calls `NCryptDecrypt` with that same TPM key and RSA-OAEP
+   padding to unwrap `wrapped_data_key_tpm` back into the data key. Because of the key's UI
+   policy, Windows pops the Hello prompt (face, fingerprint, or PIN) before it will perform the
+   decrypt. This is a Windows system prompt, not something BlueFlame draws itself, so it cannot
+   be faked by a webpage or by page script.
+4. Decryption is deterministic: the same ciphertext under the same key always unwraps to the
+   same data key, on the first unlock and on every one after it. The recovered data key is held
+   in memory only, never written to disk unwrapped.
+5. The data key decrypts locker entries on demand, one at a time, for as long as the locker
+   stays unlocked.
+6. A short auto-lock timer (a few minutes of no locker activity, configurable) zeroes the data
+   key out of memory and returns to the locked state. Reaching for a saved password after that
+   needs a fresh Windows Hello gesture, which means a fresh `NCryptDecrypt` call.
+
+This still needs to be confirmed against Daniel's actual hardware in phase 1, because not every
+TPM 2.0 implementation is guaranteed to allow an NCrypt RSA key marked for decrypt behind a
+Windows Hello UI policy. The phase 1 acceptance check is exactly that: create such a key, wrap a
+test value, unwrap it across two separate Hello prompts on two separate app runs, and confirm the
+same plaintext comes back both times. If Daniel's TPM cannot do this, the fallback is a software
+key in the Microsoft Software Key Storage Provider with the same UI policy, which loses the
+non-exportable, hardware backed guarantee but keeps the same Hello gated flow. That fallback is
+noted here as an open gap, not a solved case: a software key does not give the "cannot be
+bulk-stolen" property this whole design exists to deliver, so if Daniel's TPM turns out not to
+support this, that gap needs a real answer before this feature ships as his daily locker, not
+just this fallback.
 
 ## Data format
 
@@ -96,8 +118,9 @@ Everything lives in BlueFlame's existing SQLite database (`storage.rs`), in two 
 `locker_meta` (one row):
 
 - `format_version` (integer)
-- `key_credential_name` (text): the name of the Windows Hello for Apps key this locker is tied to
-- `wrapped_data_key_tpm` (blob): the data key, wrapped under the TPM path KEK
+- `key_credential_name` (text): the name of the NCrypt key this locker is tied to
+- `wrapped_data_key_tpm` (blob): the data key, encrypted directly with the TPM key's RSA public
+  half (RSA-OAEP), with no separate KEK derivation step
 - `wrapped_data_key_recovery` (blob): the data key, wrapped a second time under the recovery code
   path KEK, so either path alone can restore access
 - `recovery_salt`, `recovery_argon2_params` (blob, text): Argon2id parameters used to derive the
@@ -181,19 +204,22 @@ entirely.
 
 ## Windows APIs and Rust crates to use
 
-- **Windows Hello for Apps** (`Windows.Security.Credentials.KeyCredentialManager`, a WinRT API):
-  the preferred way to create and use the TPM backed, Hello gated key. Reached from Rust through
-  the `windows` crate's generated WinRT bindings. This is the same API surface Windows itself
-  uses for "sign in with Windows Hello" in other apps, so it already handles the TPM provisioning,
-  the Hello prompt, and the non-exportable key storage without BlueFlame touching raw CNG calls.
-- **Raw NCrypt / CNG** (`windows::Win32::Security::Cryptography`, targeting the Microsoft
-  Platform Crypto Provider) as a fallback path, used only if `KeyCredentialManager` is
-  unavailable on a given machine. A key created this way sets an `NCRYPT_UI_POLICY` with the
-  "force high protection" flag, so Windows itself pops the Hello prompt on every private key
-  operation, without BlueFlame drawing its own prompt UI (which page script could otherwise try
-  to spoof).
-- `aes-gcm`: AEAD encryption for the data key wrapping and for every entry's `encrypted_blob`.
-- `hkdf` and `sha2`: deriving the KEK from the Hello key's signature.
+- **NCrypt / CNG** (`windows::Win32::Security::Cryptography`, targeting the Microsoft Platform
+  Crypto Provider): the mechanism this design uses to create and use the TPM backed key,
+  reached from Rust through the `windows` crate's Win32 bindings. This is the primary path, not
+  a fallback: the key must support decrypt so BlueFlame can wrap and unwrap the data key
+  directly, and only the raw NCrypt surface, not `KeyCredentialManager`, exposes that. The key
+  is created non-exportable with an `NCRYPT_UI_POLICY` set to "force high protection," so
+  Windows itself pops the Hello prompt on every private key operation, without BlueFlame drawing
+  its own prompt UI (which page script could otherwise try to spoof).
+- **Windows Hello for Apps** (`Windows.Security.Credentials.KeyCredentialManager`, a WinRT API)
+  is deliberately not used for the data key path: it only supports signing, not decrypt, which
+  is what led to the unsound signature-derived KEK in an earlier draft of this document. It is
+  not part of the current design; if a future need for a sign-only, Hello gated key comes up
+  (proving to a remote party that Daniel unlocked, for example), it can be added separately
+  without touching the data key path above.
+- `aes-gcm`: AEAD encryption for every entry's `encrypted_blob`, and for the recovery path's
+  wrap of the data key (see "Recovery code" below).
 - `argon2`: stretching the recovery code and the export passphrase into keys.
 - `rand` (via `OsRng`): generating nonces, the data key, and the recovery code's underlying
   entropy.
@@ -207,19 +233,22 @@ entirely.
 ## Fake store for tests
 
 All TPM and Windows Hello access goes through a small Rust trait (something like
-`LockerKeyStore`, with methods for provision, sign challenge, and delete), so tests run against
-an in-memory fake implementation instead of touching Daniel's real TPM, his real BlueFlame CA, or
+`LockerKeyStore`, with methods for provision, wrap, unwrap, and delete), so tests run against an
+in-memory fake implementation instead of touching Daniel's real TPM, his real BlueFlame CA, or
 his real Windows Hello enrollment. Any test that does need a real CNG or TPM backed key for an
 integration check creates it with a name prefixed `blueflame-test-` and deletes it before the
 test ends, so nothing test related is left behind in the TPM.
 
 ## Phased build plan
 
-- **Phase 1 (S): key provisioning.** The `LockerKeyStore` trait, the `KeyCredentialManager`
-  backed implementation, the NCrypt fallback, and the fake used in tests. No UI yet.
-- **Phase 2 (S): storage and wrap or unwrap.** The two new SQLite tables, the sign-then-HKDF KEK
-  derivation, and the data key wrap and unwrap logic, unit tested end to end against the fake
-  store.
+- **Phase 1 (S): key provisioning.** The `LockerKeyStore` trait, the NCrypt backed
+  implementation against the Microsoft Platform Crypto Provider (the primary path; see "How
+  unlock works" for why `KeyCredentialManager` is not used here), the software key fallback for
+  machines without a usable TPM, and the fake used in tests. This phase's acceptance check is the
+  wrap and unwrap round trip described above, across two separate Hello prompts. No UI yet.
+- **Phase 2 (S): storage and wrap or unwrap.** The two new SQLite tables and the data key wrap
+  and unwrap logic (direct RSA-OAEP through the TPM key, no signature or HKDF step), unit tested
+  end to end against the fake store.
 - **Phase 3 (M): entry management.** Tauri commands and a settings style UI to add, view (behind
   another Hello prompt), edit, and delete entries. No autofill yet, so this phase alone is
   already useful as a manual locker.
