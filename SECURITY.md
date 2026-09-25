@@ -134,6 +134,20 @@ BlueFlame through a local pipe. What it can and can't do:
   origin is allowed for the rest of the session (and future sessions,
   since the decision persists to `<app_data>/control/approvals.json`).
 
+**What's actually been tested:** every item above except the DevTools/
+WebView2 calls themselves is covered by an automated test, including a
+real, OS-level end-to-end test
+(`cargo test --all -- --ignored real_pipe_end_to_end_through_the_bridge`)
+that runs the real named pipe, its real ACL, a real token handshake
+(accepted and rejected), and the real `mcp-bridge` process talking real MCP
+protocol through the official SDK - the transport Claude Code itself uses.
+That test stands in a fake for WebView2 (there is no safe way to also
+exercise a real browser tab from an unattended test without either booting
+Daniel's actual daily-driver BlueFlame instance - same pipe name, proxy
+port, and profile - or duplicating enough of its boot sequence to be
+misleading). A real WebView2 tab, and a real Claude Code session using the
+bridge, are Daniel's own manual smoke test per README.md before this ships.
+
 ## Root CA caveat
 
 Installing any root CA is a serious action. Anyone who obtains BlueFlame's

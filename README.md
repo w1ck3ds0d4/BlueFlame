@@ -150,6 +150,15 @@ Start BlueFlame first - the bridge reads its token file at startup and exits if 
 
 See `SECURITY.md` for exactly what the channel can and can't reach.
 
+**Testing it:** `src-tauri`'s usual `cargo test --all` covers the token, the approval gate, and tool dispatch on every platform. On Windows there's also a real, OS-level end-to-end test that isn't part of the default run (it spawns a real named pipe and the real `mcp-bridge` process, so it needs `pnpm install` in `mcp-bridge/` first):
+
+```bash
+cd src-tauri
+cargo test --all -- --ignored real_pipe_end_to_end_through_the_bridge
+```
+
+That test proves the pipe, its ACL, the token handshake, and the bridge's real MCP protocol all work together; it does not open a real WebView2 tab. Actually driving a page - the one thing left before ticking phase 1 off in `ROADMAP.md` - is the manual smoke test above: add the bridge, start BlueFlame, and ask Claude to open, read, click and type on a real page.
+
 ## Project structure
 
 ```
