@@ -69,6 +69,15 @@ keychain>` so trust is one click, matching the Windows flow. Done when: a fresh 
 - [ ] **Linux CA auto-install**: detect distro family and wrap the correct
       `update-ca-certificates` or `trust anchor` invocation. Done when: a fresh Linux install can
       trust the CA without a manual command.
+### Linux parity (after Windows v1.0.0, decided by Daniel 2026-09-25)
+
+BlueFlame already builds and runs on Linux (WebKitGTK; CI builds and tests on Ubuntu; .deb, .rpm and AppImage bundles), but the security and Claude features are Windows-only today.
+
+- [ ] **CA key protected on Linux**: keep the root key in the TPM through tpm2-tss where one exists, otherwise in the kernel keyring, never as a plain file. Done when: no CA private key exists on disk on Linux either.
+- [ ] **Claude control channel on Linux**: the same token-gated protocol over a Unix socket restricted to the user (mode 0600), with the same InPrivate tabs, approval gate and action log. Done when: the MCP bridge drives a Linux BlueFlame window.
+- [ ] **Tab events on Linux**: carry right-click, middle-click and keys over WebKitGTK's private script message channel with the same marker and token as the Windows fix, instead of Tauri IPC (blocked for web pages). Done when: the BlueFlame menu opens on any web page on Linux.
+- [ ] **Password locker unlock on Linux**: TPM or keyring-held key with a user-presence check (fprintd or the system password) in place of Windows Hello, same threat model as docs/password-locker.md. Done when: the locker works on Linux with the same guarantees stated honestly.
+
 - [ ] **Proxy bypass list** for sites that reject intercepted certificates (some banking apps).
 
 ## Later
