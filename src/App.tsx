@@ -18,7 +18,15 @@ import { TitleBar } from './components/TitleBar';
 import { UrlBar } from './components/UrlBar';
 import { TabStrip } from './components/TabStrip';
 import { BRAILLE_FRAMES, useAsciiFrames } from './ascii';
+import { applyTheme, getStoredTheme } from './theme';
+import './tokens.css';
+import './fonts.css';
 import './App.css';
+
+// Applied as a module-level side effect (not inside a component) so the
+// stored theme is on <html> before first paint, the same reasoning as
+// index.html's inline critical CSS below.
+applyTheme(getStoredTheme());
 
 interface ProxyStatus {
   running: boolean;
@@ -280,6 +288,30 @@ export default function App() {
     })
       .then((fn) => unlisteners.push(fn))
       .catch(() => undefined);
+    // From the bookmarks-folder menu popup (BookmarksBar.tsx): the
+    // same navigate + refresh its own in-DOM `open()` used to do
+    // directly, routed through an event because the popup is a
+    // separate webview and cannot call back into this one directly.
+    listen<string>('blueflame:navigate-to', (e) => {
+      invoke('browser_navigate_active', { url: e.payload })
+        .then(() => refreshTabs())
+        .then(() => showBrowser())
+        .catch(() => undefined);
+    })
+      .then((fn) => unlisteners.push(fn))
+      .catch(() => undefined);
+    // From the tab-overflow menu popup (TabStrip.tsx): the same
+    // onSelect / onClose the strip's own tab buttons call.
+    listen<number>('blueflame:select-tab', (e) => {
+      onSelectTab(e.payload).then(() => showBrowser());
+    })
+      .then((fn) => unlisteners.push(fn))
+      .catch(() => undefined);
+    listen<number>('blueflame:close-tab', (e) => {
+      onCloseTab(e.payload);
+    })
+      .then((fn) => unlisteners.push(fn))
+      .catch(() => undefined);
     return () => {
       for (const fn of unlisteners) fn();
     };
@@ -519,24 +551,30 @@ export default function App() {
         <FindBar open={findBarOpen && browsing} onClose={() => setFindBarOpen(false)} />
       </header>
 
-      {error && <div className="error-banner">{error}</div>}
-      <ApprovalBar />
+      {/* The one scrolling container in the window (see .main-content
+          in App.css): the fixed chrome above never moves, whichever
+          view is long enough to need it scrolls in here instead of the
+          whole document scrolling. */}
+      <div className="main-content">
+        {error && <div className="error-banner">{error}</div>}
+        <ApprovalBar />
 
-      {browsing ? (
-        <div className="browse-stage" aria-label="Browse area - the native webview renders below" />
-      ) : view === 'dashboard' ? (
-        <Dashboard status={status} stats={stats} onToggled={refresh} />
-      ) : view === 'bookmarks' ? (
-        <Bookmarks version={bookmarksVersion} />
-      ) : view === 'downloads' ? (
-        <Downloads />
-      ) : view === 'metrics' ? (
-        <Metrics />
-      ) : view === 'debug' ? (
-        <Debug />
-      ) : (
-        <Settings />
-      )}
+        {browsing ? (
+          <div className="browse-stage" aria-label="Browse area - the native webview renders below" />
+        ) : view === 'dashboard' ? (
+          <Dashboard status={status} stats={stats} onToggled={refresh} />
+        ) : view === 'bookmarks' ? (
+          <Bookmarks version={bookmarksVersion} />
+        ) : view === 'downloads' ? (
+          <Downloads />
+        ) : view === 'metrics' ? (
+          <Metrics />
+        ) : view === 'debug' ? (
+          <Debug />
+        ) : (
+          <Settings />
+        )}
+      </div>
 
       {!browsing && (
         <footer className="footer">

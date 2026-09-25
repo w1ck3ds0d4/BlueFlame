@@ -24,6 +24,9 @@ import {
   removeAutoBootTab,
   type Scenario,
 } from './design/mockBackend';
+import { applyTheme, type Theme } from './theme';
+import './tokens.css';
+import './fonts.css';
 import './App.css';
 import './design/design.css';
 
@@ -31,6 +34,12 @@ const qs = new URLSearchParams(window.location.search);
 const panelParam = qs.get('panel');
 const screenParam = (qs.get('screen') as ScreenId | null) ?? 'dashboard';
 const screen = SCREENS.some((s) => s.id === screenParam) ? screenParam : 'dashboard';
+
+// ?theme=light drives the design preview into the light theme, for the
+// "after" light-mode screenshots (shots.ps1 -Theme light). Defaults to
+// the dark theme, same as a fresh install.
+const themeParam: Theme = qs.get('theme') === 'light' ? 'light' : 'default';
+applyTheme(themeParam);
 
 const scenarioByScreen: Partial<Record<ScreenId, Scenario>> = {
   'trust-modal': 'trust-modal',
@@ -72,7 +81,7 @@ function openMobileTabSwitcher() {
  * needs an explicit click back to its intended state rather than
  * assuming the fixture tabs are what is showing after mount. */
 function driveToScreen(id: ScreenId) {
-  window.setTimeout(() => {
+  function step() {
     removeAutoBootTab(mockState);
     switch (id) {
       case 'dashboard':
@@ -80,7 +89,6 @@ function driveToScreen(id: ScreenId) {
       case 'trust-modal':
       case 'approval':
         selectSidebarView('dashboard');
-        if (id === 'approval') window.setTimeout(emitApprovalRequest, 150);
         break;
       case 'bookmarks':
       case 'downloads':
@@ -88,16 +96,35 @@ function driveToScreen(id: ScreenId) {
       case 'settings':
       case 'debug':
         selectSidebarView(id);
-        if (id === 'downloads') window.setTimeout(emitDownloadProgress, 150);
         break;
       case 'browsing':
         openFirstTab();
+        break;
+    }
+  }
+  // Run this twice: App.tsx's own auto-boot effect opens a fresh tab
+  // from an invoke() call that has not always resolved by the first
+  // pass, so the tab appears afterwards and silently puts the app back
+  // into browsing mode under whichever view this just picked. A second
+  // pass once that invoke() has had time to settle catches it. Rerun
+  // the id-specific follow-up (the approval/download/tabswitcher event,
+  // scheduled off this same later point) after the second pass too, so
+  // it fires against the settled state rather than racing it.
+  window.setTimeout(step, 50);
+  window.setTimeout(() => {
+    step();
+    switch (id) {
+      case 'approval':
+        window.setTimeout(emitApprovalRequest, 150);
+        break;
+      case 'downloads':
+        window.setTimeout(emitDownloadProgress, 150);
         break;
       case 'tabswitcher':
         window.setTimeout(openMobileTabSwitcher, 150);
         break;
     }
-  }, 50);
+  }, 350);
 }
 
 driveToScreen(screen);

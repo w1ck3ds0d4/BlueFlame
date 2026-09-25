@@ -1397,6 +1397,7 @@ const MENU_POPUP_MARGIN: f64 = 6.0;
 /// computes it from the clicked button's bounding rect so the popup
 /// visually hangs from the right button.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn open_menu_popup(
     app: tauri::AppHandle,
     kind: String,
@@ -1405,6 +1406,18 @@ pub async fn open_menu_popup(
     view: Option<String>,
     browsing: Option<bool>,
     bookmarked: Option<bool>,
+    // `kind: "bookmarks-folder"` (a folder's bookmarks) and
+    // `kind: "tab-overflow"` (tabs that no longer fit in the strip)
+    // carry their list as `items`, a JSON array of {id?, url, title}
+    // built on the TS side; this command only forwards it as an opaque
+    // query string, MenuPopup.tsx does the parsing. `folder` is that
+    // kind's heading (the folder's name). Both dropdowns used to render
+    // as plain DOM inside the chrome, which put them underneath the
+    // active tab's native WebView2 wherever the two overlapped; routing
+    // them through this same child-webview popup fixes that the same
+    // way the hamburger/kebab menu already does.
+    folder: Option<String>,
+    items: Option<String>,
 ) -> Result<(), String> {
     let main = app
         .get_window("main")
@@ -1427,16 +1440,26 @@ pub async fn open_menu_popup(
 
     // Close trust panel + any existing menu popup so only one popup
     // lives at a time. If the existing menu was the same kind, treat
-    // this as a toggle and return without reopening.
+    // this as a toggle and return without reopening. "bookmarks-folder"
+    // is shared by every folder chip, so two different folders must not
+    // compare equal here, or clicking "reading" while "dev" is open
+    // would just close the popup instead of switching its contents;
+    // the folder name breaks that tie the same way "kind" alone does
+    // for the one-of-a-kind hamburger and kebab buttons.
     let existing_same_kind = app
         .get_webview(MENU_POPUP_LABEL)
         .and_then(|wv| wv.url().ok())
-        .and_then(|u| {
-            u.query_pairs()
+        .map(|u| {
+            let existing_kind = u
+                .query_pairs()
                 .find(|(k, _)| k == "kind")
-                .map(|(_, v)| v.into_owned())
+                .map(|(_, v)| v.into_owned());
+            let existing_folder = u
+                .query_pairs()
+                .find(|(k, _)| k == "folder")
+                .map(|(_, v)| v.into_owned());
+            existing_kind.as_deref() == Some(kind.as_str()) && existing_folder == folder
         })
-        .map(|k| k == kind)
         .unwrap_or(false);
     if let Some(wv) = app.get_webview(TRUST_PANEL_LABEL) {
         let _ = wv.close();
@@ -1469,6 +1492,12 @@ pub async fn open_menu_popup(
         }
         if let Some(b) = bookmarked {
             qp.append_pair("bookmarked", if b { "1" } else { "0" });
+        }
+        if let Some(f) = folder.as_deref() {
+            qp.append_pair("folder", f);
+        }
+        if let Some(i) = items.as_deref() {
+            qp.append_pair("items", i);
         }
     }
 

@@ -6,13 +6,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && node scripts/check-tokens-drift.mjs && vite build",
     "postbuild": "node scripts/check-no-design-in-build.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "dev:design": "vite --open /design.html",
     "build:design": "vite build --config vite.design.config.ts",
-    "shots": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/shots.ps1"
+    "shots": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/shots.ps1 -Out before",
+    "shots:after": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/shots.ps1 -Out after"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

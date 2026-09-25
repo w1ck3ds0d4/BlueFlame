@@ -1,48 +1,72 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
-
+/* Fonts come from ./fonts.css (vendored under public/fonts, imported in
+   App.tsx). Colours, spacing, radius and shadows come from ./tokens.css
+   (a verbatim copy of the WickIT design system kit, imported the same
+   way). Nothing in this file names a raw hex, rgba() literal or bare
+   pixel value the token system already covers; the names below are
+   BlueFlame's own aliases onto that system, kept so the ~3000 lines of
+   component rules further down did not all need touching by hand.
+   BlueFlame sits in the system's Console register: dense chrome, dark
+   by default with the light theme available via [data-theme="light"]
+   on <html> (see App.tsx and Settings.tsx's appearance panel). */
 :root {
-  --bg: #0a0a0a;
-  --bg-elev: #0d0d0d;
-  --bg-raised: #141414;
-  --border: #1d1d1d;
-  --border-strong: #262626;
-  --text: #d9e3ef;
-  --text-dim: #6b7a8e;
-  --text-muted: #4a5363;
-  --accent: #00b3ff;
-  --accent-bright: #5de0ff;
-  --accent-soft: rgba(0, 179, 255, 0.08);
-  --accent-border: rgba(0, 179, 255, 0.35);
-  --danger: #ff4a5c;
-  --warn: #ffb347;
-  --ok: #44dd77;
+  --bg: var(--surface-page);
+  --bg-elev: var(--surface-card);
+  --bg-raised: var(--surface-raised);
+  --border: var(--border-default);
+  --text: var(--text-body);
+  --text-dim: var(--text-secondary);
+  --text-muted: var(--text-faint);
+  /* The flame is BlueFlame's own accent and mark, not the system's
+     action colour: it marks the brand (logo, active-tab edge, privacy
+     badges) while every button, link and focus ring keeps using the
+     system's --action-primary (indigo). wk-ember is the flame's core,
+     wk-amber its lighter tip. */
+  --accent: var(--wk-ember);
+  --accent-bright: var(--wk-amber);
+  --accent-soft: color-mix(in srgb, var(--wk-ember) 10%, transparent);
+  --accent-border: color-mix(in srgb, var(--wk-ember) 35%, transparent);
+  --danger: var(--wk-danger);
+  --warn: var(--wk-warn);
+  --ok: var(--wk-ok);
   /* Mid-trust tier (score 51-80). Sits between --warn (orange) and --ok
      (green) on the severity gradient so the trust score reads as one
-     continuous scale. Previously this tier used --accent (cyan), which
-     looked like the app's brand color instead of a severity signal. */
-  --ok-mid: #aadd55;
-  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --body: var(--mono);
-  --display: var(--mono);
-  font-family: var(--mono);
+     continuous scale, without borrowing either the flame accent or the
+     system's action colour for a status meaning. */
+  --ok-mid: color-mix(in srgb, var(--wk-warn) 45%, var(--wk-ok) 55%);
+  --mono: var(--font-mono);
+  --body: var(--font-sans);
+  --display: var(--font-display);
+  /* The system's fs-body role: 13px sans at 1.6 line-height, the
+     Console register's dense-but-readable base. */
+  font: var(--text-fs-body);
   color: var(--text);
   background: var(--bg);
-  font-size: 14px;
-  line-height: 1.5;
 }
 
 * {
   box-sizing: border-box;
 }
 
+/* The app is a bounded Tauri window, not a page: html/body never
+   scroll. The chrome (titlebar, address bar, tab strip, bookmarks bar)
+   stays pinned; a panel with more content than fits (settings,
+   downloads, the bookmarks manager, a tall dashboard) scrolls inside
+   its own container, .main-content below, never the document. Without
+   this, the whole window scrolled as one block and the chrome rode up
+   out of view with everything else. */
+html,
 body {
+  height: 100%;
   margin: 0;
-  min-height: 100vh;
+  overflow: hidden;
+}
+
+body {
   background: var(--bg);
-  /* The app is a bounded Tauri window; accidental horizontal overflow
-     (long filter-list URLs, wide tables, etc.) should never introduce
-     a side scrollbar. Per-panel scroll is fine, body scroll is not. */
-  overflow-x: hidden;
+}
+
+#root {
+  height: 100%;
 }
 
 button {
@@ -50,13 +74,19 @@ button {
 }
 
 .shell {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
   grid-template-rows: auto 1fr;
   grid-template-columns: 48px 1fr;
   grid-template-areas:
     'titlebar titlebar'
     'sidebar main';
+  /* The grid's own rows/columns are exact, but a grid item's default
+     minimum size is its content's size, which can still force this
+     grid taller than the window and reopen the whole-document scroll
+     this fixes. min-height: 0 on the row-2 items below closes that;
+     this is the matching belt-and-braces on the container. */
+  overflow: hidden;
 }
 
 .titlebar {
@@ -67,12 +97,12 @@ button {
   grid-area: sidebar;
   display: flex;
   flex-direction: column;
-  background: #050505;
+  background: var(--surface-sunken);
   border-right: 1px solid var(--border);
-  position: sticky;
-  top: 30px;
-  height: calc(100vh - 30px);
-  align-self: start;
+  /* The grid row already gives this exactly the remaining height below
+     the titlebar; no sticky/calc trick needed once .shell itself never
+     scrolls. */
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -197,13 +227,26 @@ button {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Everything below the fixed chrome header: the error banner, the
+   Claude approval bar, and whichever view is active. This is the one
+   thing in the window allowed to scroll. */
+.main-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .titlebar {
   display: flex;
   align-items: center;
   height: 30px;
-  background: #050505;
+  background: var(--surface-sunken);
   border-bottom: 1px solid var(--border);
   user-select: none;
   /* Pin to the top so vertical scrolling of main content (e.g. a long
@@ -280,15 +323,13 @@ button {
 
 .titlebar-btn.titlebar-close:hover {
   background: var(--danger);
-  color: #fff;
+  color: var(--wk-on-brand);
 }
 
 .chrome-full {
   background: var(--bg);
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 20;
+  flex: none;
 }
 
 /* ===== Mobile shell (mobile mode in Settings) ===== */
@@ -366,11 +407,37 @@ button {
 
 .url-bar-row {
   display: grid;
-  grid-template-columns: auto auto auto auto 1fr auto auto auto auto;
+  /* back, forward, reload, home, url-wrap, status-group, star, go. */
+  grid-template-columns: auto auto auto auto 1fr auto auto auto;
   gap: 4px;
   align-items: center;
   padding: 6px 16px 8px;
   position: relative;
+}
+
+/* One calm status group for the block counter and the site-scan chip,
+   so the two read as a single unit instead of two disconnected boxes.
+   Neutral by default; a real trust finding is the only thing allowed
+   to introduce colour, through the url-trust-<label> states below. */
+.status-group {
+  height: 26px;
+  display: inline-flex;
+  align-items: stretch;
+  align-self: center;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+
+.status-group > .block-counter {
+  border: none;
+  border-right: 1px solid var(--border-default);
+  border-radius: 0;
+}
+
+.status-group > .url-trust {
+  border: none;
+  border-radius: 0;
 }
 
 .url-trust {
@@ -378,6 +445,7 @@ button {
      breathing room or the last digit clips against the border. */
   width: auto;
   min-width: 42px;
+  height: 100%;
   padding: 0 8px;
   font-size: 13px;
   font-weight: 700;
@@ -392,32 +460,31 @@ button {
 .url-trust.url-trust-idle {
   color: var(--text-muted);
   background: transparent;
-  border-color: var(--border-strong);
 }
 
 /* Filled backgrounds per label so the score reads at a glance. Dark
    text on bright ok / warn / trusted tints; white on the red danger
    tint where dark text loses contrast. */
 .url-trust.url-trust-trusted {
-  color: #07140b;
+  color: var(--wk-on-bright);
   background: var(--ok);
   border-color: var(--ok);
 }
 
 .url-trust.url-trust-ok {
-  color: #0e1a07;
+  color: var(--wk-on-bright);
   background: var(--ok-mid);
   border-color: var(--ok-mid);
 }
 
 .url-trust.url-trust-suspect {
-  color: #1a1000;
+  color: var(--wk-on-bright);
   background: var(--warn);
   border-color: var(--warn);
 }
 
 .url-trust.url-trust-danger {
-  color: #fff;
+  color: var(--wk-on-brand);
   background: var(--danger);
   border-color: var(--danger);
 }
@@ -480,33 +547,35 @@ button {
 
 .block-counter {
   height: 26px;
-  padding: 0 8px;
+  padding: 0 var(--space-4);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--space-2);
   line-height: 1;
   align-self: center;
-  border: 1px solid var(--border-strong);
-  color: var(--text-muted);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
   font-family: var(--mono);
   font-size: 12px;
   cursor: help;
-  transition: color 120ms ease, border-color 120ms ease;
+  transition: color 120ms ease;
 }
 
 .block-counter-glyph {
-  font-size: 12px;
-  height: 6px;
+  flex: none;
 }
 
+/* Blocking trackers is the expected, working state, not a warning, so
+   -on only reads a touch brighter than -off; neither borrows a
+   semantic or brand colour, that stays reserved for a real finding
+   in the site-scan chip beside it. */
 .block-counter-on {
-  color: var(--accent);
-  border-color: var(--accent-border);
+  color: var(--text-body);
 }
 
 .block-counter-off {
-  color: var(--text-muted);
+  color: var(--text-faint);
 }
 
 /* The trust popup now lives in its own child webview spawned by
@@ -520,7 +589,7 @@ button {
   min-height: 100vh;
   background: var(--bg-elev);
   border: 1px solid var(--border-strong);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-modal);
   font-family: var(--mono);
   font-size: 12px;
 }
@@ -692,7 +761,7 @@ button {
 }
 
 .url-input:focus {
-  border-color: var(--accent);
+  border-color: var(--focus-ring);
 }
 
 .url-input-placeholder-cursor {
@@ -790,17 +859,20 @@ button {
 }
 
 .nav-primary {
+  /* An action button: stays on the system's action colour, never the
+     flame accent, per the design system's rule that the flame marks
+     the brand while indigo marks every button, link and focus ring. */
   height: 26px;
-  padding: 0 14px;
+  padding: 0 var(--space-6);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
   align-self: center;
-  background: var(--accent);
-  color: #000;
-  border: 1px solid var(--accent);
-  border-radius: 0;
+  background: var(--action-primary);
+  color: var(--wk-on-brand);
+  border: 1px solid var(--action-primary);
+  border-radius: var(--radius-xs);
   font-family: var(--mono);
   font-weight: 700;
   font-size: 12px;
@@ -809,7 +881,8 @@ button {
 }
 
 .nav-primary:hover {
-  background: var(--accent-bright);
+  background: var(--action-primary-hover);
+  border-color: var(--action-primary-hover);
 }
 
 .url-error {
@@ -826,10 +899,13 @@ button {
 
 .tab-strip {
   display: flex;
+  align-items: stretch;
   gap: 0;
-  padding: 0 12px;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  padding: 0 var(--space-5);
+  /* Never a scrollbar: tabs share the available width and shrink down
+     to MIN_TAB_WIDTH (TabStrip.tsx) together; past that point the rest
+     move into the overflow menu instead of overflowing this row. */
+  overflow: hidden;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
@@ -837,18 +913,21 @@ button {
 .tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  flex: 1 1 180px;
+  min-width: 96px;
   max-width: 220px;
   background: transparent;
   color: var(--text-dim);
   border: none;
   border-right: 1px solid var(--border);
+  border-bottom: 2px solid transparent;
   border-radius: 0;
   font-family: var(--mono);
   font-size: 12px;
   cursor: pointer;
-  transition: color 120ms ease, background 120ms ease;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
 }
 
 .tab-favicon {
@@ -898,7 +977,7 @@ button {
   line-height: 1;
   color: var(--accent);
   border: 1px solid var(--accent);
-  border-radius: 2px;
+  border-radius: var(--radius-hair);
   padding: 0 3px;
 }
 
@@ -911,6 +990,81 @@ button {
 .tab-new-private:hover {
   color: var(--warn);
   border-color: var(--warn);
+}
+
+/* Tabs that no longer fit at the shrink floor, once the strip cannot
+   grow any thinner (TabStrip.tsx computes this from the strip's real
+   width). The toggle button lives in the chrome; the list itself opens
+   as a menu-popup child webview (see openOverflowMenu in TabStrip.tsx
+   and MenuPopup.tsx's "tab-overflow" kind), never a DOM dropdown here,
+   so it can never end up underneath the active tab's native WebView2.
+   .tab-overflow-item and its children below are that popup's row
+   style, shared with the bookmarks-folder popup. */
+.tab-overflow-toggle {
+  height: 26px;
+  padding: 0 var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 2px;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.tab-overflow-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.tab-overflow-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tab-overflow-item:hover {
+  color: var(--text);
+  background: var(--bg-raised);
+}
+
+.tab-overflow-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tab-overflow-item-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.tab-overflow-item-close:hover {
+  color: var(--danger);
 }
 
 .find-bar {
@@ -941,7 +1095,7 @@ button {
 }
 
 .find-bar-input:focus {
-  border-color: var(--accent);
+  border-color: var(--focus-ring);
 }
 
 .find-bar-btn {
@@ -966,24 +1120,30 @@ button {
 
 .tab:hover {
   color: var(--text);
+  background: var(--bg-elev);
 }
 
-.tab-active {
-  color: var(--accent);
+/* The active tab stands out through the system's active-nav underline
+   (the action colour, same rule as a focus ring or a primary button),
+   a raised background and full-strength text, not a borrowed accent
+   colour or an ASCII marker. */
+.tab-active,
+.tab-active:hover {
+  color: var(--text);
   background: var(--bg-raised);
-}
-
-.tab-active::before {
-  content: '>';
-  margin-right: 4px;
-  color: var(--accent);
+  border-bottom-color: var(--action-primary);
 }
 
 .tab-title {
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 170px;
+  flex: 1 1 auto;
+  min-width: 0;
+  /* A soft fade at the clipped edge instead of an abrupt hard cut or a
+     "..." ellipsis, the same effect a native browser tab strip uses. */
+  mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
 }
 
 .tab-close {
@@ -1021,9 +1181,9 @@ button {
 
 .bookmarks-bar {
   display: flex;
-  gap: 0;
+  gap: var(--space-2);
   align-items: center;
-  padding: 3px 12px;
+  padding: var(--space-2) var(--space-5);
   min-height: 26px;
   background: var(--bg);
   border-top: 1px solid var(--border);
@@ -1033,48 +1193,43 @@ button {
 
 .bookmarks-empty {
   font-size: 11px;
-  color: var(--text-muted);
-  padding: 2px 4px;
+  color: var(--text-faint);
+  padding: var(--space-1) var(--space-2);
 }
 
+/* A proper chip: bordered, radiused, its own hover and focus states.
+   No bracket characters; the icon carries what kind of bookmark it is. */
 .bookmark-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  height: 22px;
   background: transparent;
-  border: none;
-  border-radius: 0;
-  color: var(--text-dim);
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
   font-family: var(--mono);
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
   max-width: 180px;
-  transition: color 120ms ease;
-}
-
-.bookmark-chip::before {
-  content: '[';
-  color: var(--text-muted);
-}
-
-.bookmark-chip::after {
-  content: ']';
-  color: var(--text-muted);
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
 }
 
 .bookmark-chip:hover {
-  color: var(--accent);
+  color: var(--text-body);
+  background: var(--bg-raised);
+  border-color: var(--border-default);
 }
 
-.bookmark-chip:hover::before,
-.bookmark-chip:hover::after {
-  color: var(--accent);
+.bookmark-chip-icon {
+  flex: none;
+  color: var(--text-faint);
 }
 
-.bookmark-chip-star {
-  display: none;
+.bookmark-chip:hover .bookmark-chip-icon {
+  color: var(--accent);
 }
 
 .bookmark-chip-label {
@@ -1087,21 +1242,23 @@ button {
 }
 
 .bookmark-folder-chip.open {
+  color: var(--text-body);
+  background: var(--bg-raised);
+  border-color: var(--border-default);
+}
+
+.bookmark-folder-chip.open .bookmark-chip-icon {
   color: var(--accent);
 }
 
-.bookmark-folder-chip.open::before,
-.bookmark-folder-chip.open::after {
-  color: var(--accent);
+.bookmark-folder-chevron {
+  flex: none;
+  color: var(--text-faint);
+  transition: transform 120ms ease;
 }
 
-.bookmark-folder-icon {
-  font-size: 10px;
-  color: var(--text-muted);
-}
-
-.bookmark-folder-chip.open .bookmark-folder-icon {
-  color: var(--accent);
+.bookmark-folder-chip.open .bookmark-folder-chevron {
+  color: var(--text-secondary);
   transform: rotate(90deg);
 }
 
@@ -1115,7 +1272,7 @@ button {
   overflow-y: auto;
   background: var(--bg-elev);
   border: 1px solid var(--border-strong);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-modal);
   z-index: 200;
   padding: 4px 0;
 }
@@ -1371,7 +1528,7 @@ button {
 .pi-modal-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1615,7 +1772,7 @@ button {
 
 .status-pill[data-running='true'] {
   color: var(--ok);
-  border-color: rgba(68, 221, 119, 0.4);
+  border-color: color-mix(in srgb, var(--wk-ok) 40%, transparent);
 }
 
 .system-line {
@@ -2014,11 +2171,12 @@ button {
 }
 
 .primary {
-  padding: 6px 20px;
-  background: var(--accent);
-  color: #000;
-  border: 1px solid var(--accent);
-  border-radius: 0;
+  /* Action colour, not the flame accent; see .nav-primary above. */
+  padding: var(--space-4) var(--space-8);
+  background: var(--action-primary);
+  color: var(--wk-on-brand);
+  border: 1px solid var(--action-primary);
+  border-radius: var(--radius-xs);
   font-family: var(--mono);
   font-weight: 700;
   font-size: 12px;
@@ -2027,7 +2185,8 @@ button {
 }
 
 .primary:hover:not(:disabled) {
-  background: var(--accent-bright);
+  background: var(--action-primary-hover);
+  border-color: var(--action-primary-hover);
 }
 
 .primary:disabled {
@@ -2094,7 +2253,7 @@ button {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2139,7 +2298,7 @@ button {
 
 .callout-warn {
   background: transparent;
-  border: 1px solid rgba(255, 179, 71, 0.4);
+  border: 1px solid color-mix(in srgb, var(--wk-warn) 40%, transparent);
   color: var(--warn);
 }
 
@@ -2464,7 +2623,7 @@ button {
 }
 
 .mobile-url-input:focus {
-  border-color: var(--accent-border);
+  border-color: var(--focus-ring);
 }
 
 .mobile-trust {
@@ -2505,7 +2664,7 @@ button {
   padding: 4px;
   background: var(--bg-elev);
   border: 1px solid var(--border-strong);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -2580,9 +2739,9 @@ button {
 }
 
 .mobile-chrome-error {
-  padding: 6px 10px;
+  padding: var(--space-4) var(--space-5);
   background: var(--danger);
-  color: #fff;
+  color: var(--wk-on-brand);
   font-size: 12px;
 }
 
@@ -2649,11 +2808,16 @@ button {
   min-width: 0;
 }
 
-.tab-card:hover,
+.tab-card:hover {
+  border-color: var(--accent-border);
+  background: var(--bg-raised);
+}
+
 .tab-card:focus-visible {
   border-color: var(--accent-border);
   background: var(--bg-raised);
-  outline: none;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .tab-card-active {
@@ -2721,10 +2885,10 @@ button {
 
 .tab-card-badge {
   display: inline-block;
-  padding: 0 4px;
-  margin-right: 4px;
+  padding: 0 var(--space-2);
+  margin-right: var(--space-2);
   background: var(--warn);
-  color: #1a1000;
+  color: var(--wk-on-bright);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -2768,7 +2932,7 @@ html:has(.menu-popup-body) {
 .menu-popup {
   background: var(--bg-elev);
   border: 1px solid var(--border-strong);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-modal);
   font-family: var(--mono);
   font-size: 13px;
   padding: 4px;
@@ -2823,6 +2987,20 @@ html:has(.menu-popup-body) {
   height: 1px;
   margin: 4px 2px;
   background: var(--border);
+}
+
+.menu-popup-heading {
+  padding: var(--space-2) var(--space-4);
+  color: var(--text-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.menu-popup-empty {
+  padding: var(--space-4);
+  color: var(--text-faint);
+  font-size: 12px;
 }
 
 /* Context menu reuses .menu-popup structural CSS; overrides below are
@@ -3317,7 +3495,7 @@ html:has(.menu-popup-body) {
   height: 4px;
   width: 100%;
   background: var(--border);
-  border-radius: 2px;
+  border-radius: var(--radius-hair);
   overflow: hidden;
 }
 
@@ -3336,5 +3514,31 @@ html:has(.menu-popup-body) {
   }
   .download-row-actions {
     justify-content: flex-end;
+  }
+}
+
+/* Accessibility floor added with the WickIT design system upgrade
+   (WCAG 2.2 AA, 2.4.7 Focus Visible / 2.4.11 Focus Not Obscured). A
+   catch-all so every interactive element gets the system's 2px focus
+   ring at a 2px offset, even one none of the rules above already gave
+   a bespoke focus style to. More specific rules above still win where
+   they add a border-color change alongside this ring. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Motion respects prefers-reduced-motion everywhere, per the system's
+   accessibility minimums: transitions collapse to near-instant instead
+   of being stripped outright, so a state change still reads as one,
+   just without the animated glide. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

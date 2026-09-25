@@ -19,6 +19,29 @@ import {
   Terminal,
 } from 'lucide-react';
 
+/** One row in a "bookmarks-folder" or "tab-overflow" popup, passed in
+ * through the `items` query param as a JSON array (see BookmarksBar.tsx
+ * and TabStrip.tsx, the two callers). `id` is a tab id (tab-overflow
+ * only); its absence marks a bookmark row. */
+interface PopupListItem {
+  id?: number;
+  url: string;
+  title: string;
+}
+
+function parseItems(raw: string | null): PopupListItem[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (it): it is PopupListItem => it && typeof it.url === 'string' && typeof it.title === 'string',
+    );
+  } catch {
+    return [];
+  }
+}
+
 type LucideIcon = ComponentType<{ size?: number; strokeWidth?: number }>;
 
 type View = 'dashboard' | 'bookmarks' | 'downloads' | 'metrics' | 'settings' | 'debug';
@@ -55,6 +78,8 @@ export function MenuPopup() {
   const initialView = (params.get('view') as View) ?? 'dashboard';
   const bookmarkedInitial = params.get('bookmarked') === '1';
   const browsingParam = params.get('browsing') === '1';
+  const folderName = params.get('folder');
+  const listItems = parseItems(params.get('items'));
 
   const [bookmarked] = useState(bookmarkedInitial);
   const [statusKind, setStatusKind] = useState<StatusKind>('off');
@@ -67,6 +92,26 @@ export function MenuPopup() {
   useEffect(() => {
     document.body.classList.add('menu-popup-body');
     return () => document.body.classList.remove('menu-popup-body');
+  }, []);
+
+  // Close on outside click and Escape. The popup is its own child
+  // webview, so "outside click" shows up here as the webview losing
+  // focus (the main window, or any other webview, took it) rather than
+  // a DOM event this document could otherwise miss.
+  useEffect(() => {
+    function onBlur() {
+      close();
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') close();
+    }
+    window.addEventListener('blur', onBlur);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useLayoutEffect(() => {
@@ -139,6 +184,70 @@ export function MenuPopup() {
       () => undefined,
     );
     await close();
+  }
+
+  async function navigateTo(url: string) {
+    await emit('blueflame:navigate-to', url).catch(() => undefined);
+    await close();
+  }
+
+  async function selectTab(id: number) {
+    await emit('blueflame:select-tab', id).catch(() => undefined);
+    await close();
+  }
+
+  async function closeTab(e: { stopPropagation: () => void }, id: number) {
+    e.stopPropagation();
+    await emit('blueflame:close-tab', id).catch(() => undefined);
+  }
+
+  if (kind === 'bookmarks-folder') {
+    return (
+      <div className="menu-popup" role="menu" ref={rootRef}>
+        {folderName && <div className="menu-popup-heading">{folderName}</div>}
+        {listItems.length === 0 ? (
+          <div className="menu-popup-empty">empty folder</div>
+        ) : (
+          listItems.map((it, i) => (
+            <button
+              key={`${it.url}-${i}`}
+              role="menuitem"
+              className="bookmark-folder-item"
+              onClick={() => navigateTo(it.url)}
+              title={it.url}
+            >
+              <span className="bookmark-folder-item-label">{it.title}</span>
+            </button>
+          ))
+        )}
+      </div>
+    );
+  }
+
+  if (kind === 'tab-overflow') {
+    return (
+      <div className="menu-popup" role="menu" ref={rootRef}>
+        {listItems.map((it) => (
+          <button
+            key={it.id}
+            role="menuitem"
+            className="tab-overflow-item"
+            onClick={() => it.id != null && selectTab(it.id)}
+            title={it.url}
+          >
+            <span className="tab-overflow-item-title">{it.title}</span>
+            <span
+              className="tab-overflow-item-close"
+              role="button"
+              aria-label={`Close ${it.title}`}
+              onClick={(e) => it.id != null && closeTab(e, it.id)}
+            >
+              &times;
+            </span>
+          </button>
+        ))}
+      </div>
+    );
   }
 
   if (kind === 'hamburger') {
