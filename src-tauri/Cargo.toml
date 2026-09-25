@@ -103,9 +103,36 @@ rayon = "1"
 # transitive tree smaller.
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 
+# Claude control channel: tool-call dispatch is written once and shared by
+# the real WebView2 implementation and the in-memory test fake, so both
+# sides implement the same `async fn` trait rather than hand-rolled boxed
+# futures.
+async-trait = "0.1"
+
+# Session token for the control pipe. A direct, minimal dependency (rather
+# than pulling in all of `rand`) purely for its OS-CSPRNG access - already
+# a transitive dependency of rustls/ring, so this adds no new supply chain.
+getrandom = "0.2"
+
 [features]
 default = ["built-in-tor"]
 built-in-tor = ["dep:arti-client", "dep:tor-rtcompat"]
+
+# Claude control channel (Windows only in phase 1, see ROADMAP.md): the
+# named pipe's ACL and the in-process DevTools calls both need direct COM
+# access. Pinned to the same `webview2-com`/`windows` versions Tauri's own
+# `tauri-runtime-wry` uses internally (checked against Cargo.lock) so the
+# `ICoreWebView2Controller` a tab's `PlatformWebview::controller()` returns
+# is the exact same type our code calls methods on - a version drift here
+# is a compile error, not a runtime one.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_System_Threading",
+] }
 
 # macOS 14+ WKWebView gets its per-webview proxy via Tauri's
 # macos-proxy feature (which pulls in wry's mac-proxy, using the

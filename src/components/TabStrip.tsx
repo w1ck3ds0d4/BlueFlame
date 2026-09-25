@@ -18,9 +18,20 @@ interface Props {
   onClose: (id: number) => void;
   onNewTab: () => void;
   onNewPrivateTab: () => void;
+  /** Tabs Claude opened through the control channel. Rendered with a badge
+   * so it's always visible which tabs Claude is driving. */
+  claudeTabIds?: number[];
 }
 
-export function TabStrip({ tabs, activeId, onSelect, onClose, onNewTab, onNewPrivateTab }: Props) {
+export function TabStrip({
+  tabs,
+  activeId,
+  onSelect,
+  onClose,
+  onNewTab,
+  onNewPrivateTab,
+  claudeTabIds,
+}: Props) {
   const anyLoading = tabs.some((t) => t.loading);
   const spinner = useAsciiFrames(BRAILLE_FRAMES, 90, anyLoading);
   const [favicons, setFavicons] = useState<Record<string, string>>({});
@@ -70,6 +81,7 @@ export function TabStrip({ tabs, activeId, onSelect, onClose, onNewTab, onNewPri
       {tabs.map((t) => {
         const host = hostOf(t.url);
         const fav = host ? favicons[host] : undefined;
+        const claudeDriven = claudeTabIds?.includes(t.id) ?? false;
         return (
           <button
             key={t.id}
@@ -77,9 +89,9 @@ export function TabStrip({ tabs, activeId, onSelect, onClose, onNewTab, onNewPri
             aria-selected={t.id === activeId}
             className={`tab ${t.id === activeId ? 'tab-active' : ''} ${
               t.private ? 'tab-private' : ''
-            }`}
+            } ${claudeDriven ? 'tab-claude' : ''}`}
             onClick={() => onSelect(t.id)}
-            title={t.private ? `[private] ${t.url}` : t.url}
+            title={claudeDriven ? `[Claude is driving this tab] ${t.url}` : t.private ? `[private] ${t.url}` : t.url}
           >
             <span className="tab-favicon" aria-hidden>
               {t.loading ? (
@@ -90,6 +102,11 @@ export function TabStrip({ tabs, activeId, onSelect, onClose, onNewTab, onNewPri
                 <span className="tab-spinner tab-spinner-dim">·</span>
               )}
             </span>
+            {claudeDriven && (
+              <span className="tab-claude-badge" aria-label="Claude is driving this tab">
+                C
+              </span>
+            )}
             <span className="tab-title">{t.title || t.url}</span>
             <span
               className="tab-close"
