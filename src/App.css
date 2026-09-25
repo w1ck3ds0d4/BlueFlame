@@ -898,24 +898,37 @@ button {
   border-bottom: 1px solid var(--border);
 }
 
-.tab {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
+/* .tab-wrap is the flex item the strip actually lays out: it carries
+   the width, border and active/private/claude state that used to live
+   on .tab itself. Two sibling buttons live inside it (select, close),
+   not a button nested inside a button, so a keyboard user can reach
+   and activate the close control on its own (see TabStrip.tsx). */
+.tab-wrap {
+  display: flex;
+  align-items: stretch;
   flex: 1 1 180px;
   min-width: 96px;
   max-width: 220px;
   background: transparent;
-  color: var(--text-dim);
-  border: none;
   border-right: 1px solid var(--border);
   border-bottom: 2px solid transparent;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  flex: 1 1 auto;
+  min-width: 0;
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
   border-radius: 0;
   font-family: var(--mono);
   font-size: 12px;
   cursor: pointer;
-  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
 }
 
 .tab-favicon {
@@ -1141,20 +1154,30 @@ button {
   border-color: var(--accent);
 }
 
-.tab:hover {
-  color: var(--text);
+/* Hovering either sibling (select or close) highlights the whole row,
+   the same feel the old single-button tab had; the text color change
+   lives on .tab-wrap:hover .tab because .tab sets its own color, which
+   would otherwise win over a color set on the wrapper alone. */
+.tab-wrap:hover {
   background: var(--bg-elev);
+}
+
+.tab-wrap:hover .tab {
+  color: var(--text);
 }
 
 /* The active tab stands out through the system's active-nav underline
    (the action colour, same rule as a focus ring or a primary button),
    a raised background and full-strength text, not a borrowed accent
    colour or an ASCII marker. */
-.tab-active,
-.tab-active:hover {
-  color: var(--text);
+.tab-wrap.tab-active,
+.tab-wrap.tab-active:hover {
   background: var(--bg-raised);
   border-bottom-color: var(--action-primary);
+}
+
+.tab-wrap.tab-active .tab {
+  color: var(--text);
 }
 
 .tab-title {
@@ -1174,16 +1197,25 @@ button {
   -webkit-mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
 }
 
+/* 24x24 CSS px minimum target size (WCAG 2.2 2.5.8), not the 14x14 the
+   old nested span used; align-self centers it in the taller .tab-wrap
+   row without changing that row's own height. */
 .tab-close {
+  flex: none;
+  align-self: center;
+  margin-right: var(--space-2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
   color: var(--text-muted);
   font-size: 14px;
   line-height: 1;
   border-radius: 0;
+  cursor: pointer;
 }
 
 .tab-close:hover {

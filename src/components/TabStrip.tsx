@@ -141,46 +141,56 @@ export function TabStrip({
         const fav = host ? favicons[host] : undefined;
         const claudeDriven = claudeTabIds?.includes(t.id) ?? false;
         return (
-          <button
+          // Two sibling buttons, not a button nested inside a button: a
+          // <button> cannot nest inside another <button> (invalid HTML,
+          // and a nested non-button close target could not take keyboard
+          // focus of its own), so a keyboard user could select a tab here
+          // but never close one. Same structure as MenuPopup.tsx's
+          // "tab-overflow" kind.
+          <div
             key={t.id}
-            role="tab"
-            aria-selected={t.id === activeId}
-            className={`tab ${t.id === activeId ? 'tab-active' : ''} ${
+            className={`tab-wrap ${t.id === activeId ? 'tab-active' : ''} ${
               t.private ? 'tab-private' : ''
             } ${claudeDriven ? 'tab-claude' : ''}`}
-            onClick={() => onSelect(t.id)}
-            title={claudeDriven ? `[Claude is driving this tab] ${t.url}` : t.private ? `private tab: ${t.url}` : t.url}
           >
-            <span className="tab-favicon" aria-hidden>
-              {t.loading ? (
-                <span className="tab-spinner">{spinner}</span>
-              ) : fav ? (
-                <img src={fav} alt="" className="tab-favicon-img" />
-              ) : (
-                <span className="tab-spinner tab-spinner-dim">·</span>
-              )}
-            </span>
-            {t.private && (
-              <VenetianMask className="tab-private-icon" aria-hidden size={12} strokeWidth={1.75} />
-            )}
-            {claudeDriven && (
-              <span className="tab-claude-badge" aria-label="Claude is driving this tab">
-                C
+            <button
+              role="tab"
+              aria-selected={t.id === activeId}
+              className="tab"
+              onClick={() => onSelect(t.id)}
+              title={claudeDriven ? `[Claude is driving this tab] ${t.url}` : t.private ? `private tab: ${t.url}` : t.url}
+            >
+              <span className="tab-favicon" aria-hidden>
+                {t.loading ? (
+                  <span className="tab-spinner">{spinner}</span>
+                ) : fav ? (
+                  <img src={fav} alt="" className="tab-favicon-img" />
+                ) : (
+                  <span className="tab-spinner tab-spinner-dim">·</span>
+                )}
               </span>
-            )}
-            <span className="tab-title">{t.title || t.url}</span>
-            <span
+              {t.private && (
+                <VenetianMask className="tab-private-icon" aria-hidden size={12} strokeWidth={1.75} />
+              )}
+              {claudeDriven && (
+                <span className="tab-claude-badge" aria-label="Claude is driving this tab">
+                  C
+                </span>
+              )}
+              <span className="tab-title">{t.title || t.url}</span>
+            </button>
+            <button
+              type="button"
               className="tab-close"
-              role="button"
               aria-label={`Close ${t.title}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onClose(t.id);
               }}
             >
-              ×
-            </span>
-          </button>
+              <span aria-hidden>&times;</span>
+            </button>
+          </div>
         );
       })}
       {hiddenTabs.length > 0 && (
