@@ -26,13 +26,13 @@ Chrome. The core browser and the Claude channel are built in parallel.
       needs Windows Hello, autofill fills only the exact saved origin, page scripts and the Claude
       channel can never read it, and an offline recovery code survives a TPM reset. Done when: a
       design doc in `docs/` is signed off by Daniel.
-- [ ] **Claude control channel, phase 1**: a control server inside BlueFlame on a local named pipe
+- [x] **Claude control channel, phase 1**: a control server inside BlueFlame on a local named pipe
       with a per-session token, driven through a small MCP bridge, exposing a limited tool set (tabs,
       navigate, read page text and structure, click, type, scroll, screenshot) implemented in-process
       (WebView2's own DevTools calls, never an open remote-debugging port). Claude works in a separate
       profile with none of Daniel's logins, a banner shows while Claude drives a tab, each new site
       needs approval, every action is logged, and nothing can read cookies or the password locker.
-      Done when: Claude Code can open, read and operate a page in BlueFlame through the bridge.
+      Done when: Claude Code can open, read and operate a page in BlueFlame through the bridge. (#107)
 - [ ] **Streaming downloads**: `downloads.rs` buffers whole files in memory and refuses anything over
       500 MB. Done when: downloads stream to disk with progress and no size cap.
 - [ ] **Default browser on Windows**: register BlueFlame for http, https and .html so Windows lists
