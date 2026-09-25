@@ -5,12 +5,15 @@ mod acl;
 mod devtools;
 mod pipe;
 
+#[cfg(test)]
+mod e2e_test;
+
 use std::sync::Arc;
 
 use tauri::{AppHandle, Listener, Manager};
 
 use super::approval::ApprovalGate;
-use super::dispatch::ToolDispatcher;
+use super::dispatch::{Dispatch, ToolDispatcher};
 use super::log::ActionLog;
 use super::tabs::ClaudeTabs;
 use super::token::{write_token_file, SessionToken};
@@ -37,9 +40,9 @@ pub async fn start(app: &AppHandle) -> anyhow::Result<SharedDispatcher> {
     ));
 
     let serve_token = token.clone();
-    let serve_dispatcher = dispatcher.clone();
+    let serve_dispatcher: Arc<dyn Dispatch> = dispatcher.clone();
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = pipe::serve(serve_token, serve_dispatcher).await {
+        if let Err(e) = pipe::serve(pipe::PIPE_NAME, serve_token, serve_dispatcher).await {
             tracing::error!(error = ?e, "control pipe server stopped");
         }
     });

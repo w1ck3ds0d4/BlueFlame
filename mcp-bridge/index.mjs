@@ -8,7 +8,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-import { ControlPipeClient, defaultTokenPath, readToken } from "./pipe-client.mjs";
+import { ControlPipeClient, PIPE_NAME, defaultTokenPath, readToken } from "./pipe-client.mjs";
 import { TOOLS, TOOL_NAMES, toContent } from "./tools.mjs";
 
 async function main() {
@@ -20,7 +20,11 @@ async function main() {
     );
   });
 
-  const client = new ControlPipeClient({ token });
+  // BLUEFLAME_PIPE_NAME lets a test point the bridge at a disposable pipe
+  // instead of the one real BlueFlame instance uses. Daniel never sets
+  // this himself; leaving it unset keeps the real, fixed pipe name.
+  const pipeName = process.env.BLUEFLAME_PIPE_NAME || PIPE_NAME;
+  const client = new ControlPipeClient({ token, pipeName });
 
   const server = new Server(
     { name: "blueflame", version: "0.1.0" },

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::windows::named_pipe::{NamedPipeServer, PipeMode, ServerOptions};
 
-use super::super::dispatch::ToolDispatcher;
+use super::super::dispatch::Dispatch;
 use super::super::protocol::{Handshake, Request, Response};
 use super::super::token::SessionToken;
 use super::acl::{current_user_only_sddl, SecurityDescriptorGuard};
@@ -29,7 +29,16 @@ const MAX_LINE_BYTES: usize = 4 * 1024 * 1024;
 /// Each connection gets its own task so a slow or hung caller (there should
 /// only ever be one - the local MCP bridge - but nothing stops Daniel from
 /// running two) can't block the others.
-pub async fn serve(token: SessionToken, dispatcher: Arc<ToolDispatcher>) -> anyhow::Result<()> {
+///
+/// `pipe_name` is a parameter (rather than always reading the `PIPE_NAME`
+/// constant directly) so the end-to-end test below can bind a distinct,
+/// disposable pipe name instead of ever contending for the one real
+/// BlueFlame instances use - see `e2e_test`.
+pub async fn serve(
+    pipe_name: &str,
+    token: SessionToken,
+    dispatcher: Arc<dyn Dispatch>,
+) -> anyhow::Result<()> {
     let sddl = current_user_only_sddl()?;
     let mut first = true;
     loop {
@@ -45,7 +54,7 @@ pub async fn serve(token: SessionToken, dispatcher: Arc<ToolDispatcher>) -> anyh
         // for the lifetime of this call; CreateNamedPipeW (which this wraps)
         // only reads it synchronously before returning.
         let server: NamedPipeServer = unsafe {
-            options.create_with_security_attributes_raw(PIPE_NAME, guard.as_raw() as *mut c_void)?
+            options.create_with_security_attributes_raw(pipe_name, guard.as_raw() as *mut c_void)?
         };
         drop(guard);
 
@@ -82,7 +91,7 @@ fn check_handshake(line: &str, token: &SessionToken) -> HandshakeOutcome {
 async fn handle_connection(
     server: NamedPipeServer,
     token: SessionToken,
-    dispatcher: Arc<ToolDispatcher>,
+    dispatcher: Arc<dyn Dispatch>,
 ) -> anyhow::Result<()> {
     let (read_half, mut write_half) = tokio::io::split(server);
     let mut reader = BufReader::new(read_half);

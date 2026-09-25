@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use async_trait::async_trait;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::oneshot;
@@ -20,6 +21,25 @@ use crate::browser;
 /// Long enough that stepping away for a minute doesn't lose the request,
 /// short enough that a forgotten prompt doesn't hang Claude forever.
 const APPROVAL_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Abstracts "given a tool name and its arguments, run it" behind a trait,
+/// the same way `PageActions` abstracts WebView2 away from `ToolDispatcher`
+/// itself. `ToolDispatcher` needs a real `AppHandle`, which only exists once
+/// a real, WebView2-capable app has booted; `pipe::serve` depending on this
+/// trait instead of the concrete type lets a real end-to-end test exercise
+/// the actual named pipe, its ACL, and the token handshake against a
+/// lightweight double instead - see `windows_impl::e2e_test`.
+#[async_trait]
+pub trait Dispatch: Send + Sync {
+    async fn dispatch(&self, tool: &str, args: Value) -> Result<Value, String>;
+}
+
+#[async_trait]
+impl Dispatch for ToolDispatcher {
+    async fn dispatch(&self, tool: &str, args: Value) -> Result<Value, String> {
+        ToolDispatcher::dispatch(self, tool, args).await
+    }
+}
 
 pub struct ToolDispatcher {
     app: AppHandle,
