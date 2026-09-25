@@ -163,28 +163,20 @@ fn load_or_create_with<P: AsRef<Path>>(
     // must reuse the recorded value rather than re-reading `cert_path`,
     // which that earlier attempt may already have overwritten with the
     // new cert (see `migrate_from_legacy_install` for why that matters).
+    //
+    // A failure here must abort this whole call rather than fall through:
+    // `cert_is_stale` below is unconditionally true on a migrating install
+    // with no fingerprint file yet, so falling through would overwrite
+    // `cert_path` with the new cert before the legacy thumbprint was ever
+    // durably recorded, destroying the only copy of the true legacy cert.
+    // The next launch would then capture the *new* cert's thumbprint as if
+    // it were the legacy one and have `migrate_from_legacy_install` remove
+    // the only trusted BlueFlame root as though it were the old one.
     if migrating && !legacy_thumbprint_path.exists() {
-        match std::fs::read_to_string(&cert_path) {
-            Ok(legacy_pem) => match crate::ca_trust::cert_thumbprint_sha1(&legacy_pem) {
-                Ok(thumb) => {
-                    if let Err(e) = std::fs::write(&legacy_thumbprint_path, &thumb) {
-                        tracing::warn!(
-                            "blueflame: could not record the legacy CA root's thumbprint, \
-                             migration will not proceed until it can: {e}"
-                        );
-                    }
-                }
-                Err(e) => tracing::warn!(
-                    "blueflame: could not compute the legacy CA root's thumbprint, migration \
-                     will not proceed until it can: {e}"
-                ),
-            },
-            Err(e) => tracing::warn!(
-                "blueflame: legacy key file is present but its cert is not, so there is \
-                 nothing safe to remove from the trust store; migration will not proceed \
-                 until it can: {e}"
-            ),
-        }
+        capture_legacy_thumbprint(&cert_path, &legacy_thumbprint_path).context(
+            "capturing the legacy CA root's thumbprint before migrating off it; refusing to \
+             touch the CA cert file until this is durably recorded",
+        )?;
     }
 
     let key = ca_tpm::load_or_create_root_key(store, cng_key_name)
@@ -224,6 +216,29 @@ fn load_or_create_with<P: AsRef<Path>>(
     }
 
     Ok(RootCa { cert_pem, key })
+}
+
+/// Read the legacy cert at `cert_path`, thumbprint it, and durably record
+/// that thumbprint at `legacy_thumbprint_path` before the caller is allowed
+/// to touch `cert_path` again. Every failure here (unreadable/corrupt cert,
+/// unparseable PEM, a write that cannot land) must stop the caller cold:
+/// there is no safe fallback that lets migration continue without a
+/// recorded legacy thumbprint, since the very next step would otherwise
+/// overwrite the only copy of the legacy cert.
+#[cfg(target_os = "windows")]
+fn capture_legacy_thumbprint(
+    cert_path: &Path,
+    legacy_thumbprint_path: &Path,
+) -> anyhow::Result<()> {
+    let legacy_pem = std::fs::read_to_string(cert_path).context(
+        "legacy key file is present but its cert is not, so there is nothing safe to remove \
+         from the trust store",
+    )?;
+    let thumb = crate::ca_trust::cert_thumbprint_sha1(&legacy_pem)
+        .context("computing the legacy CA root's thumbprint")?;
+    std::fs::write(legacy_thumbprint_path, &thumb)
+        .context("recording the legacy CA root's thumbprint")?;
+    Ok(())
 }
 
 #[cfg(target_os = "windows")]
@@ -757,6 +772,91 @@ mod windows_tests {
             trust.removed.lock().unwrap().is_empty(),
             "the old root was already gone before this call, so remove should not be called again"
         );
+        assert_only_new_root_trusted(&trust, &ca.cert_pem);
+    }
+
+    #[test]
+    fn thumbprint_capture_failure_aborts_without_touching_cert_file() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        std::fs::create_dir_all(dir).unwrap();
+
+        // A legacy key file is present (so migration is detected) but the
+        // cert file next to it is corrupt, not valid PEM at all.
+        std::fs::write(dir.join(CERT_FILE), b"not a real cert").unwrap();
+        std::fs::write(dir.join(windows_paths::LEGACY_KEY_FILE), b"not a real key").unwrap();
+
+        let store = fake_store();
+        let trust = FakeTrust::default();
+
+        let result = load_or_create_with(dir, store, "blueflame-test-ca-capture-fail", &trust);
+        let err = match result {
+            Err(e) => e,
+            Ok(_) => panic!(
+                "a capture failure must abort rather than proceed and overwrite the cert file"
+            ),
+        };
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("thumbprint") || msg.contains("legacy"),
+            "unexpected error: {msg}"
+        );
+
+        // Nothing migration will need later got touched.
+        assert_eq!(
+            std::fs::read(dir.join(CERT_FILE)).unwrap(),
+            b"not a real cert",
+            "the corrupt legacy cert file must be left exactly as it was, never overwritten"
+        );
+        assert!(
+            dir.join(windows_paths::LEGACY_KEY_FILE).exists(),
+            "the legacy key file must survive a capture failure"
+        );
+        assert!(
+            !dir.join(windows_paths::LEGACY_THUMBPRINT_FILE).exists(),
+            "no thumbprint should be recorded from a failed capture"
+        );
+        assert!(
+            !dir.join(windows_paths::PUBKEY_FINGERPRINT_FILE).exists(),
+            "no new cert/key should be generated when the capture step aborts first"
+        );
+        assert!(trust.trusted.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn retry_after_fixing_a_corrupt_legacy_cert_completes_migration() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        std::fs::create_dir_all(dir).unwrap();
+
+        std::fs::write(dir.join(CERT_FILE), b"not a real cert").unwrap();
+        std::fs::write(dir.join(windows_paths::LEGACY_KEY_FILE), b"not a real key").unwrap();
+
+        let store = fake_store();
+        let trust = FakeTrust::default();
+        let first_attempt = load_or_create_with(
+            dir,
+            Arc::clone(&store),
+            "blueflame-test-ca-capture-retry",
+            &trust,
+        );
+        assert!(
+            first_attempt.is_err(),
+            "first attempt should abort on the corrupt cert"
+        );
+
+        // Whoever owns the box fixes the corrupt file and a real legacy
+        // install shows up in its place.
+        let legacy_pem = write_legacy_fixture(dir);
+        let legacy_thumb =
+            crate::ca_trust::cert_thumbprint_sha1(&legacy_pem).expect("legacy thumbprint");
+        trust.trusted.lock().unwrap().insert(legacy_thumb);
+
+        let ca = load_or_create_with(dir, store, "blueflame-test-ca-capture-retry", &trust)
+            .expect("retry should succeed once the legacy cert is readable");
+
+        assert!(!dir.join(windows_paths::LEGACY_KEY_FILE).exists());
+        assert!(!dir.join(windows_paths::LEGACY_THUMBPRINT_FILE).exists());
         assert_only_new_root_trusted(&trust, &ca.cert_pem);
     }
 
