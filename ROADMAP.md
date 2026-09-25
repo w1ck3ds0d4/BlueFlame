@@ -43,6 +43,7 @@ Chrome. The core browser and the Claude channel are built in parallel.
       adds the bridge per README.md and runs that smoke test himself, then ticks this line.
 - [x] **Streaming downloads**: `downloads.rs` buffers whole files in memory and refuses anything over
       500 MB. Done when: downloads stream to disk with progress and no size cap. (#105)
+- [ ] **Adopt the WickIT design system (flame accent)**: Daniel asked on 2026-09-25 for BlueFlame to share WickIT's design system in the Console register, with the flame as its accent and mark. The browser chrome (tab strip, address bar, panels, privacy dashboard, downloads, settings, the Claude approval bar) moves onto the kit's tokens (`tokens.css` copied verbatim from WickIT HQ's `Design System/Kits/` with a drift check), fonts and components; web pages themselves are never restyled. Placed before the remaining UI work so new screens are built in the final look. Done when: no colour, spacing or radius in `src/` bypasses a token, and the chrome has been checked against the kit at laptop width in dark and light.
 - [ ] **Default browser on Windows**: register BlueFlame for http, https and .html so Windows lists
       it. Done when: BlueFlame can be picked in Settings > Default apps.
 - [ ] **Multiple windows**: every tab is a child of the single `main` window today. Done when: a tab
@@ -57,6 +58,7 @@ Chrome. The core browser and the Claude channel are built in parallel.
 - [ ] **Password locker build**, after the design is signed off.
 - [ ] **Claude control channel, phase 2**: package the bridge as a one-click Claude desktop
       extension. Done when: the Claude desktop app can add BlueFlame's tools without editing config.
+- [ ] **Usability and accessibility pass**: Daniel asked on 2026-09-25 for his products to look better and be more user friendly and professional. Audit every screen with the nielsen-heuristics-audit, wcag-2.2-aa and web-design-guidelines skills, rank the findings, and fix the top ones (keyboard use, focus, contrast, empty and error states, copy). Done when: the audit is in `docs/` and every high-severity finding is fixed, with before and after screenshots at phone and laptop width.
 - [ ] **Tag v1.0.0 and cut a GitHub release** once the items above are done.
 
 ## Next
