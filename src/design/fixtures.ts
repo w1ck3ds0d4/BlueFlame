@@ -71,17 +71,24 @@ export const CA_TRUST_UNTRUSTED = {
   auto_install_supported: true,
 };
 
+// Dashboard.tsx, Downloads.tsx, Settings.tsx and Debug.tsx all read their
+// timestamp fields as epoch seconds (each does its own age math against
+// Date.now() / 1000, or new Date(epochSecs * 1000)), so every fixture
+// feeding one of those must be built in seconds, not milliseconds.
+// created_at/visited_at below stay on `now` (ms): nothing reads them as
+// a date, they only ever get compared to each other for sort order.
+const now = Date.now();
+const nowSec = Math.floor(now / 1000);
+
 export const SYSTEM_SUMMARY = {
   uptime_secs: 5 * 3600 + 12 * 60,
   patterns_active: 184_302,
   lists_total: 9,
-  last_refresh_secs: 3600 * 2,
+  last_refresh_secs: nowSec - 3600 * 2,
 };
 
-const now = Date.now();
-
 export const RECENT_BLOCKS = Array.from({ length: 60 }, (_, i) => ({
-  ts: now - i * 4300,
+  ts: nowSec - Math.round(i * 4.3),
   url: [
     'https://ads.trackernet.example/pixel.gif',
     'https://metrics.adservice.example/collect',
@@ -113,8 +120,8 @@ export const HISTORY = [
 // Downloads.tsx only shows an active row while a
 // 'blueflame:download-progress' event says so, never from the log list.
 export const DOWNLOADS = [
-  { id: 2, url: 'https://github.com/w1ck3ds0d4/BlueFlame/archive/refs/heads/main.zip', filename: 'BlueFlame-main.zip', path: 'C:\\Users\\daniel\\Downloads\\BlueFlame-main.zip', size: 3_400_000, ts: now - 3_600_000 },
-  { id: 1, url: 'https://docs.rs/-/latest/tauri.pdf', filename: 'tauri-notes.pdf', path: 'C:\\Users\\daniel\\Downloads\\tauri-notes.pdf', size: 812_000, ts: now - 86_400_000 },
+  { id: 2, url: 'https://github.com/w1ck3ds0d4/BlueFlame/archive/refs/heads/main.zip', filename: 'BlueFlame-main.zip', path: 'C:\\Users\\daniel\\Downloads\\BlueFlame-main.zip', size: 3_400_000, ts: nowSec - 3600 },
+  { id: 1, url: 'https://docs.rs/-/latest/tauri.pdf', filename: 'tauri-notes.pdf', path: 'C:\\Users\\daniel\\Downloads\\tauri-notes.pdf', size: 812_000, ts: nowSec - 86400 },
 ];
 
 export const DOWNLOAD_IN_PROGRESS_ID = 3;
@@ -123,9 +130,9 @@ export const DOWNLOAD_IN_PROGRESS_TOTAL = 41_200_000;
 export const DOWNLOAD_IN_PROGRESS_WRITTEN = 18_500_000;
 
 export const FILTER_LISTS = [
-  { name: 'EasyList', url: 'https://easylist.to/easylist/easylist.txt', cached: true, cached_at: now - 3_600_000 },
-  { name: 'EasyPrivacy', url: 'https://easylist.to/easylist/easyprivacy.txt', cached: true, cached_at: now - 3_600_000 },
-  { name: 'URLhaus', url: 'https://urlhaus.abuse.ch/downloads/text/', cached: true, cached_at: now - 7_200_000 },
+  { name: 'EasyList', url: 'https://easylist.to/easylist/easylist.txt', cached: true, cached_at: nowSec - 3600 },
+  { name: 'EasyPrivacy', url: 'https://easylist.to/easylist/easyprivacy.txt', cached: true, cached_at: nowSec - 3600 },
+  { name: 'URLhaus', url: 'https://urlhaus.abuse.ch/downloads/text/', cached: true, cached_at: nowSec - 7200 },
 ];
 
 export const SEARCH_ENGINES = [
@@ -143,7 +150,7 @@ export const TOR_SETTINGS = {
 };
 
 export const REPUTATION_FEEDS = [
-  { name: 'URLhaus', url: 'https://urlhaus.abuse.ch/downloads/text/', cached: true, cached_at: now - 7_200_000 },
+  { name: 'URLhaus', url: 'https://urlhaus.abuse.ch/downloads/text/', cached: true, cached_at: nowSec - 7200 },
   { name: 'PhishTank', url: 'https://data.phishtank.com/data/online-valid.json', cached: false, cached_at: null },
 ];
 
@@ -163,7 +170,7 @@ export const METRICS_SNAPSHOT = {
 };
 
 export const DEBUG_LOG = Array.from({ length: 40 }, (_, i) => ({
-  ts: now - i * 8000,
+  ts: nowSec - i * 8,
   level: ['info', 'info', 'warn', 'error'][i % 4],
   target: ['proxy', 'storage', 'frontend:console', 'tor'][i % 4],
   message: [

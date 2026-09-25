@@ -29,21 +29,29 @@ interface NavItem {
   label: string;
 }
 
+// The rail is 48px wide, too narrow for a full word under an icon
+// without wrapping or overflowing, so each view is icon-only here; the
+// full word carries the tooltip and the accessible name instead of a
+// cryptic on-screen abbreviation.
 const NAV: NavItem[] = [
-  { id: 'dashboard', Icon: LayoutGrid, label: 'dash' },
-  { id: 'bookmarks', Icon: Star, label: 'bkm' },
-  { id: 'downloads', Icon: Download, label: 'dl' },
-  { id: 'metrics', Icon: Activity, label: 'mtr' },
-  { id: 'settings', Icon: SettingsIcon, label: 'set' },
-  { id: 'debug', Icon: Terminal, label: 'dbg' },
+  { id: 'dashboard', Icon: LayoutGrid, label: 'Dashboard' },
+  { id: 'bookmarks', Icon: Star, label: 'Bookmarks' },
+  { id: 'downloads', Icon: Download, label: 'Downloads' },
+  { id: 'metrics', Icon: Activity, label: 'Metrics' },
+  { id: 'settings', Icon: SettingsIcon, label: 'Settings' },
+  { id: 'debug', Icon: Terminal, label: 'Debug' },
 ];
 
-const STATUS_LABEL: Record<StatusKind, string> = {
-  on: 'on',
-  off: 'off',
-  starting: '…',
-  booting: 'tor',
-  failed: 'err',
+// What the dot's colour means, spelled out for the tooltip and
+// accessible name; the on-screen word stays a constant "proxy" (the
+// dot's colour already carries on/off/starting/failed) rather than
+// repeating state as an abbreviation like "err" or "…".
+const STATUS_MEANING: Record<StatusKind, string> = {
+  on: 'running',
+  off: 'stopped',
+  starting: 'starting',
+  booting: 'starting tor',
+  failed: 'failed',
 };
 
 export function Sidebar({ view, browsing, onSelect, statusText, statusKind }: Props) {
@@ -58,23 +66,33 @@ export function Sidebar({ view, browsing, onSelect, statusText, statusKind }: Pr
               key={item.id}
               className={`sidebar-btn ${active ? 'sidebar-btn-active' : ''}`}
               onClick={() => onSelect(item.id)}
-              title={item.id}
+              title={item.label}
+              // aria-label stays the lowercase id, not the capitalized
+              // display label: design-main.tsx's screen driver selects
+              // this button by aria-label to steer the design preview
+              // to each screen, and the id is already a clear, unabbreviated
+              // word on its own.
               aria-label={item.id}
               aria-current={active ? 'page' : undefined}
             >
               <span className="sidebar-btn-icon" aria-hidden>
-                <Icon size={18} strokeWidth={1.75} />
+                <Icon size={20} strokeWidth={1.75} />
               </span>
-              <span className="sidebar-btn-label">{item.label}</span>
             </button>
           );
         })}
       </nav>
-      <div className={`sidebar-status sidebar-status-${statusKind}`} title={statusText}>
+      <div
+        className={`sidebar-status sidebar-status-${statusKind}`}
+        title={statusText}
+        aria-label={`filter proxy: ${STATUS_MEANING[statusKind]}`}
+      >
         <span className="sidebar-status-dot" aria-hidden>
           ●
         </span>
-        <span className="sidebar-status-label">{STATUS_LABEL[statusKind]}</span>
+        <span className="sidebar-status-label" aria-hidden>
+          proxy
+        </span>
       </div>
     </aside>
   );

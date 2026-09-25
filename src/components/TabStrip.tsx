@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, VenetianMask } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { BRAILLE_FRAMES, useAsciiFrames } from '../ascii';
@@ -149,7 +149,7 @@ export function TabStrip({
               t.private ? 'tab-private' : ''
             } ${claudeDriven ? 'tab-claude' : ''}`}
             onClick={() => onSelect(t.id)}
-            title={claudeDriven ? `[Claude is driving this tab] ${t.url}` : t.private ? `[private] ${t.url}` : t.url}
+            title={claudeDriven ? `[Claude is driving this tab] ${t.url}` : t.private ? `private tab: ${t.url}` : t.url}
           >
             <span className="tab-favicon" aria-hidden>
               {t.loading ? (
@@ -160,6 +160,9 @@ export function TabStrip({
                 <span className="tab-spinner tab-spinner-dim">·</span>
               )}
             </span>
+            {t.private && (
+              <VenetianMask className="tab-private-icon" aria-hidden size={12} strokeWidth={1.75} />
+            )}
             {claudeDriven && (
               <span className="tab-claude-badge" aria-label="Claude is driving this tab">
                 C
