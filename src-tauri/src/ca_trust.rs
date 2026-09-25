@@ -58,16 +58,14 @@ pub fn install(cert_path: &Path) -> anyhow::Result<()> {
 /// Deliberately thumbprint-based rather than common-name-based: migrating
 /// to a new CA root must never take out some other cert that happens to
 /// share the BlueFlame CA's CN.
+///
+/// Only meaningful on Windows: it exists solely for the CNG migration path
+/// in `ca.rs`, which is itself Windows-only (see `ca_tpm.rs`). Other
+/// platforms have no caller for this yet, unlike `install` above, which the
+/// `install_ca` Tauri command reaches on every platform.
+#[cfg(target_os = "windows")]
 pub fn remove_by_thumbprint(thumbprint: &str) -> anyhow::Result<()> {
-    #[cfg(target_os = "windows")]
-    {
-        windows::remove_by_thumbprint(thumbprint)
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        anyhow::bail!("removing a trust store entry by thumbprint is only implemented on Windows: {thumbprint}")
-    }
+    windows::remove_by_thumbprint(thumbprint)
 }
 
 /// Abstraction over the trust-store install/remove calls, so CA migration
