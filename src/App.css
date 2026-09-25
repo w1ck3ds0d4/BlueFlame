@@ -3302,6 +3302,31 @@ html:has(.menu-popup-body) {
   flex-shrink: 0;
 }
 
+.downloads-page-active-list {
+  flex: none;
+  min-height: 0;
+  border-color: var(--accent, var(--border));
+}
+
+.download-row-active {
+  background: var(--surface-2, transparent);
+}
+
+.download-row-progress-track {
+  margin-top: 4px;
+  height: 4px;
+  width: 100%;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.download-row-progress-fill {
+  height: 100%;
+  background: var(--accent, var(--text));
+  transition: width 0.2s ease;
+}
+
 @media (max-width: 640px) {
   .downloads-page {
     padding: 12px;

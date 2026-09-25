@@ -58,8 +58,8 @@ use context_menu::{
 };
 use control::commands::{control_recent_log, control_respond_approval};
 use downloads::{
-    downloads_clear, downloads_list, downloads_open, downloads_reveal, DownloadsLog,
-    SharedDownloadsLog,
+    downloads_cancel, downloads_clear, downloads_list, downloads_open, downloads_reveal,
+    ActiveDownloads, DownloadsLog, SharedActiveDownloads, SharedDownloadsLog,
 };
 use import_export::{export_data, import_bookmarks_html, import_data};
 use metrics::{get_system_metrics, MetricsCollector, SharedMetrics};
@@ -131,6 +131,7 @@ pub fn run() {
         .manage(context_token.clone())
         .manage(context_tx_shared.clone())
         .manage::<SharedDownloadsLog>(Arc::new(DownloadsLog::default()))
+        .manage::<SharedActiveDownloads>(Arc::new(ActiveDownloads::default()))
         .manage::<SharedMetrics>(Arc::new(MetricsCollector::default()))
         .setup(move |app| {
             // Open the personal-index store so commands can rely on it being in state.
@@ -337,6 +338,7 @@ pub fn run() {
             get_system_metrics,
             downloads_list,
             downloads_clear,
+            downloads_cancel,
             downloads_open,
             downloads_reveal,
             control_respond_approval,
@@ -433,6 +435,7 @@ async fn start_proxy_at_boot(
     let context_token: std::sync::Arc<String> = (*app.state::<SharedContextToken>()).clone();
     let context_tx = (*app.state::<SharedContextMenuTx>()).clone();
     let downloads_log: SharedDownloadsLog = (*app.state::<SharedDownloadsLog>()).clone();
+    let active_downloads: SharedActiveDownloads = (*app.state::<SharedActiveDownloads>()).clone();
 
     let runner = proxy::start(
         port,
@@ -447,6 +450,7 @@ async fn start_proxy_at_boot(
         context_tx,
         app.clone(),
         downloads_log,
+        active_downloads,
     )
     .await?;
 

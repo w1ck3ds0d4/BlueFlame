@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 /** Matches Rust's `DownloadEntry`. */
 interface DownloadEntry {
@@ -11,6 +12,17 @@ interface DownloadEntry {
   ts: number;
 }
 
+/** Matches Rust's `DownloadProgress`, emitted on `blueflame:download-progress`. */
+interface DownloadProgress {
+  id: number;
+  url: string;
+  bytes_written: number;
+  total: number | null;
+  done: boolean;
+}
+
+const PROGRESS_EVENT = 'blueflame:download-progress';
+
 /**
  * Recent-downloads panel. Pulls the log from Rust on mount and
  * every few seconds so new entries show up while the user is
@@ -18,9 +30,17 @@ interface DownloadEntry {
  * tauri-plugin-opener via the `downloads_open` / `downloads_reveal`
  * commands. Desktop + mobile share the same layout; mobile just
  * gets tighter padding via the existing breakpoint.
+ *
+ * In-flight downloads stream to disk in Rust, so this panel also
+ * subscribes to `blueflame:download-progress` and shows a live row
+ * per active download with a cancel button (`downloads_cancel`).
+ * The row drops off once the backend reports `done: true`; a
+ * `reload()` then picks up the finished entry from the log (or, on
+ * cancel/failure, no new entry appears at all).
  */
 export function Downloads() {
   const [entries, setEntries] = useState<DownloadEntry[]>([]);
+  const [active, setActive] = useState<Map<number, DownloadProgress>>(new Map());
   const [error, setError] = useState<string | null>(null);
 
   async function reload() {
@@ -38,6 +58,44 @@ export function Downloads() {
     const id = window.setInterval(reload, 3000);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    let unlisten: UnlistenFn | undefined;
+    let cancelled = false;
+
+    listen<DownloadProgress>(PROGRESS_EVENT, (event) => {
+      const p = event.payload;
+      setActive((prev) => {
+        const next = new Map(prev);
+        if (p.done) {
+          next.delete(p.id);
+        } else {
+          next.set(p.id, p);
+        }
+        return next;
+      });
+      if (p.done) reload();
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
+  async function onCancel(id: number) {
+    try {
+      await invoke('downloads_cancel', { id });
+    } catch (e) {
+      setError(String(e));
+    }
+  }
 
   async function onOpen(path: string) {
     try {
@@ -82,11 +140,42 @@ export function Downloads() {
 
       {error && <div className="error-banner">downloads: {error}</div>}
 
-      {entries.length === 0 ? (
+      {active.size > 0 && (
+        <ul className="downloads-page-list downloads-page-active-list">
+          {Array.from(active.values()).map((p) => (
+            <li key={p.id} className="download-row download-row-active">
+              <div className="download-row-main">
+                <div className="download-row-title">{filenameFromUrl(p.url)}</div>
+                <div className="download-row-meta">
+                  {formatBytes(p.bytes_written)}
+                  {p.total ? ` of ${formatBytes(p.total)}` : ''} · downloading
+                </div>
+                <div className="download-row-progress-track">
+                  <div
+                    className="download-row-progress-fill"
+                    style={
+                      p.total
+                        ? { width: `${Math.min(100, (p.bytes_written / p.total) * 100)}%` }
+                        : { width: '100%' }
+                    }
+                  />
+                </div>
+              </div>
+              <div className="download-row-actions">
+                <button className="secondary" onClick={() => onCancel(p.id)}>
+                  cancel
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {entries.length === 0 && active.size === 0 ? (
         <div className="downloads-page-empty">
           // no downloads yet. files saved from the browser will appear here.
         </div>
-      ) : (
+      ) : entries.length === 0 ? null : (
         <ul className="downloads-page-list">
           {entries.map((e) => (
             <li key={e.id} className="download-row">
@@ -128,4 +217,17 @@ function formatAge(epochSecs: number): string {
   if (age < 3600) return `${Math.floor(age / 60)}m ago`;
   if (age < 86400) return `${Math.floor(age / 3600)}h ago`;
   return `${Math.floor(age / 86400)}d ago`;
+}
+
+/** The progress event only carries the source URL, not the final
+ * sanitized filename (that's decided when the file lands), so the
+ * in-progress row shows a best-effort name from the URL path. */
+function filenameFromUrl(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    const last = path.split('/').filter(Boolean).pop();
+    return last ? decodeURIComponent(last) : url;
+  } catch {
+    return url;
+  }
 }

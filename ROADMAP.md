@@ -41,8 +41,8 @@ Chrome. The core browser and the Claude channel are built in parallel.
       proxy port, and app-data-derived profile/CA). Nothing further needs building for phase 1. Done
       when: Claude Code can open, read and operate a real page in BlueFlame through the bridge - Daniel
       adds the bridge per README.md and runs that smoke test himself, then ticks this line.
-- [ ] **Streaming downloads**: `downloads.rs` buffers whole files in memory and refuses anything over
-      500 MB. Done when: downloads stream to disk with progress and no size cap.
+- [x] **Streaming downloads**: `downloads.rs` buffers whole files in memory and refuses anything over
+      500 MB. Done when: downloads stream to disk with progress and no size cap. (#105)
 - [ ] **Default browser on Windows**: register BlueFlame for http, https and .html so Windows lists
       it. Done when: BlueFlame can be picked in Settings > Default apps.
 - [ ] **Multiple windows**: every tab is a child of the single `main` window today. Done when: a tab
