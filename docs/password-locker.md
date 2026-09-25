@@ -433,8 +433,11 @@ likely each split into two or three smaller pull requests as they get built.
 - The lockout curve above (delay from the 4th failure, hard lockout after 10) is a proposed
   default, not something Daniel has confirmed. Is that too strict or too lenient given how often
   he expects to fumble a code?
-- Recovery phrase format: a word list phrase, or would Daniel rather have a printable QR code to
-  store instead?
+- Recovery phrase word list: Daniel already decided on a written word phrase over a QR code, but
+  not which word list to draw it from. The design below assumes the standard BIP-39 English list
+  (2048 words, used only for its word list and encoding, see the crates section) because it is
+  the most common choice and every wallet-style app Daniel might reference already uses it. Is
+  that the right list, or does Daniel want a plain diceware list instead?
 - Is there a specific authenticator app Daniel already uses (Google Authenticator, Aegis, 2FAS,
   or something else), so the phase 3 acceptance check is run against that exact app rather than
   just RFC 6238 test vectors?
