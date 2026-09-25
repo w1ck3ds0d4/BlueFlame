@@ -212,6 +212,8 @@ struct BlueFlameHandler {
     /// saved files end up in the UI-visible ring buffer.
     app_handle: tauri::AppHandle,
     downloads_log: crate::downloads::SharedDownloadsLog,
+    /// Cancel-flag registry for downloads currently streaming to disk.
+    active_downloads: crate::downloads::SharedActiveDownloads,
 }
 
 impl HttpHandler for BlueFlameHandler {
@@ -221,7 +223,7 @@ impl HttpHandler for BlueFlameHandler {
         req: Request<Body>,
     ) -> RequestOrResponse {
         // Sentinel interception: requests to host `blueflame.ipc` are
-        // the tab-webview → Rust back-channel for context-menu events.
+        // the tab-webview -> Rust back-channel for context-menu events.
         // Short-circuit before touching stats/filters so they don't
         // count toward the user's browsing numbers.
         if req.uri().host() == Some("blueflame.ipc") {
@@ -343,6 +345,7 @@ impl HttpHandler for BlueFlameHandler {
                 disposition.as_deref(),
                 &self.app_handle,
                 &self.downloads_log,
+                &self.active_downloads,
             )
             .await;
         }
@@ -544,63 +547,52 @@ async fn analyze_html_body(
     out
 }
 
-/// Pull a download response body fully into memory (up to our cap),
-/// save it to disk via `downloads::save`, and substitute a short
-/// HTML "Saved to …" page as the response. On any failure we return
-/// an HTML error stub instead of the raw bytes so the user still
-/// sees a useful message in the tab.
+/// Stream a download response body to a temp file in the OS download
+/// directory via `downloads::save_streaming`, then substitute a short
+/// HTML "Saved to …" page as the response. Memory use stays flat
+/// regardless of file size since the body is written chunk by chunk
+/// rather than buffered whole; there is no size cap. On any failure
+/// (including a mid-stream cancel from the `downloads_cancel`
+/// command) we return an HTML error stub instead of the raw bytes so
+/// the user still sees a useful message in the tab, and the partial
+/// temp file has already been cleaned up by `stream_to_disk`.
 async fn intercept_download(
     res: Response<Body>,
     url: &str,
     disposition: Option<&str>,
     app: &tauri::AppHandle,
     log: &crate::downloads::SharedDownloadsLog,
+    active_downloads: &crate::downloads::SharedActiveDownloads,
 ) -> Response<Body> {
-    use http_body_util::{BodyExt, Full};
+    use http_body_util::Full;
 
-    // Grab content-length up-front so we can reject oversized files
-    // before we've buffered them - servers that honor it give us a
-    // cheap pre-flight.
+    // Content-Length, when present, is purely informational now - it
+    // feeds the progress percentage shown to the frontend, not a
+    // pre-flight size check.
     let declared_len = res
         .headers()
         .get("content-length")
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse::<u64>().ok());
-    if let Some(n) = declared_len {
-        if n > crate::downloads::MAX_SIZE {
-            return download_error_stub(
-                url,
-                &format!(
-                    "file too large to save via BlueFlame ({} MB > {} MB cap)",
-                    n / 1024 / 1024,
-                    crate::downloads::MAX_SIZE / 1024 / 1024
-                ),
-            );
-        }
-    }
 
     let decoded = match hudsucker::decode_response(res) {
         Ok(r) => r,
         Err(e) => return download_error_stub(url, &format!("decode: {e}")),
     };
     let (_parts, body) = decoded.into_parts();
-    let bytes = match body.collect().await {
-        Ok(c) => c.to_bytes(),
-        Err(e) => return download_error_stub(url, &format!("read body: {e}")),
-    };
-    if bytes.len() as u64 > crate::downloads::MAX_SIZE {
-        return download_error_stub(
-            url,
-            &format!(
-                "file too large to save via BlueFlame ({} MB > {} MB cap)",
-                bytes.len() / 1024 / 1024,
-                crate::downloads::MAX_SIZE / 1024 / 1024,
-            ),
-        );
-    }
 
     let disp_filename = disposition.and_then(parse_disposition_filename);
-    match crate::downloads::save(log, app, url, disp_filename.as_deref(), &bytes) {
+    match crate::downloads::save_streaming(
+        log,
+        active_downloads,
+        app,
+        url,
+        disp_filename.as_deref(),
+        declared_len,
+        body,
+    )
+    .await
+    {
         Ok(entry) => {
             let body_html = download_saved_html(&entry);
             Response::builder()
@@ -610,7 +602,7 @@ async fn intercept_download(
                 .body(Body::from(Full::new(bytes::Bytes::from(body_html))))
                 .expect("static response")
         }
-        Err(e) => download_error_stub(url, &e),
+        Err(e) => download_error_stub(url, &e.to_string()),
     }
 }
 
@@ -761,6 +753,7 @@ pub async fn start(
     context_tx: Arc<Mutex<Option<crate::context_menu::ContextMenuTx>>>,
     app_handle: tauri::AppHandle,
     downloads_log: crate::downloads::SharedDownloadsLog,
+    active_downloads: crate::downloads::SharedActiveDownloads,
 ) -> anyhow::Result<ProxyRunner> {
     // hudsucker 0.24 needs an `Issuer` (parsed CA cert + key) plus a
     // `CryptoProvider`. We share the process-wide `ring` provider
@@ -784,6 +777,7 @@ pub async fn start(
         context_tx,
         app_handle,
         downloads_log,
+        active_downloads,
     };
 
     let addr: SocketAddr = ([127, 0, 0, 1], port).into();
