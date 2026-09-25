@@ -109,3 +109,41 @@ same branch before this PR was opened.
 - The dev-only `DesignSwitcher` panel (`src/design/design.css`) was left on its own local colours;
   it never ships (`scripts/check-no-design-in-build.mjs` asserts that) and is not part of the
   product's chrome.
+
+## Addendum: review follow-up
+
+Five more issues came back from review of the first draft of this PR. Ranked most severe first,
+same convention as above.
+
+13. **JetBrains Mono 404s on every screen.** `tokens.css`'s own `@font-face` for the mono face
+    points at a path relative to itself (`fonts/...`) that only resolves inside the kit's own
+    folder layout; `fonts.css` added a working duplicate face but never stopped the browser from
+    also requesting the broken one, so every view logged a console error, in the real production
+    build as well as the design preview (H9's "does every view render without console errors"
+    was not actually met). Fixed: the same font files are now also vendored at `src/fonts/`, the
+    exact path `tokens.css` resolves against, with `src/fonts/OFL.txt` beside them; Vite bundles
+    that reference like any other CSS asset, so the request now resolves, and the duplicate
+    JetBrains Mono declarations in `fonts.css` were removed as no longer needed.
+14. **A stale tab in the tab-overflow popup crashed into a raw error banner.** The popup's row
+    list is a snapshot taken when it opens; nothing closed or refreshed it when a tab it listed
+    closed afterward, so a stale row stayed clickable and selecting it surfaced the backend's
+    internal `unknown tab id N` string in the visible error banner. Fixed: `blueflame:tabs-changed`
+    now closes any open popup alongside its existing tab-list refresh, and `onSelectTab` treats an
+    unknown-tab-id error as a stale click (silently refreshes the tab list) rather than a failure
+    worth showing.
+15. **Two accent systems in the same window.** `.sidebar-btn-active`, the icon-rail's active-view
+    indicator, still coloured itself with the flame accent, the same bug already fixed for the tab
+    strip and the primary buttons elsewhere in this PR. Fixed: it now uses `--action-primary`
+    (indigo), matching every other active-state indicator in the chrome.
+16. **The CA trust dialog undersold its own severity.** The generic `.modal` shell backing
+    `CaTrustModal.tsx`, BlueFlame's most security-sensitive dialog, bordered itself and coloured
+    its heading with the decorative flame accent rather than a semantic colour, and kept a
+    leftover ASCII `'> '` prompt prefix already removed from the tab strip for being dated. Fixed:
+    the shell now borders and headlines itself in `--warn`, the same severity signal as the
+    `callout-warn` box already inside it, and the prompt prefix is gone.
+17. **The tab-overflow close control was half-usable from a keyboard.** It was a `<span
+    role="button">` nested inside the row's own `<button>`, at 16x16 CSS px: a `<span>` cannot
+    take native keyboard focus, so a keyboard-only user could select a tab from the menu but not
+    close one, and the target was under WCAG 2.2's 2.5.8 minimum (24x24 CSS px). Fixed: the row is
+    now two sibling buttons (select, close), each independently focusable, with the close button
+    sized to 24x24 CSS px.

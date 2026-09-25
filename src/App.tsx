@@ -140,6 +140,17 @@ export default function App() {
       const v = await invoke<TabsView>('browser_switch_tab', { id });
       applyTabsView(v);
     } catch (e) {
+      // A tab-overflow popup's row list is a snapshot from when it opened;
+      // if the tab it points at closed in the meantime (a real race, not
+      // just theoretical, since the popup is a separate child webview with
+      // no live feed of tab changes), the backend reports it as unknown
+      // instead of switching. That is a stale click, not a failure worth
+      // an internal error string in the user-facing banner: refresh the
+      // real tab list instead.
+      if (String(e).includes('unknown tab id')) {
+        refreshTabs();
+        return;
+      }
       setError(String(e));
     }
   }
@@ -200,12 +211,18 @@ export default function App() {
   }, [trustDismissed]);
 
   // Backend fires this whenever a tab's URL or derived title changes (page
-  // navigates, redirect, SPA route swap). Re-pull the tab list so the tab
-  // strip + URL bar follow the real page the user is on.
+  // navigates, redirect, SPA route swap) and whenever a tab opens or
+  // closes. Re-pull the tab list so the tab strip + URL bar follow the
+  // real page the user is on, and close any open child-webview popup: the
+  // tab-overflow and bookmark-folder popups render a static row list
+  // captured at open time, with no live feed of their own, so a tab
+  // closing out from under an open overflow menu would otherwise leave a
+  // stale, still-clickable row on screen.
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
     listen('blueflame:tabs-changed', () => {
       refreshTabs();
+      invoke('close_all_popups').catch(() => undefined);
     })
       .then((fn) => {
         unlisten = fn;

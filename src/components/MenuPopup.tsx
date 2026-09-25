@@ -228,23 +228,27 @@ export function MenuPopup() {
     return (
       <div className="menu-popup" role="menu" ref={rootRef}>
         {listItems.map((it) => (
-          <button
-            key={it.id}
-            role="menuitem"
-            className="tab-overflow-item"
-            onClick={() => it.id != null && selectTab(it.id)}
-            title={it.url}
-          >
-            <span className="tab-overflow-item-title">{it.title}</span>
-            <span
+          // Two sibling buttons, not a button nested inside a button: a
+          // keyboard user needs to Tab to each one separately, to select
+          // the tab or to close it.
+          <div key={it.id} className="tab-overflow-item">
+            <button
+              role="menuitem"
+              className="tab-overflow-item-select"
+              onClick={() => it.id != null && selectTab(it.id)}
+              title={it.url}
+            >
+              <span className="tab-overflow-item-title">{it.title}</span>
+            </button>
+            <button
+              type="button"
               className="tab-overflow-item-close"
-              role="button"
               aria-label={`Close ${it.title}`}
               onClick={(e) => it.id != null && closeTab(e, it.id)}
             >
-              &times;
-            </span>
-          </button>
+              <span aria-hidden>&times;</span>
+            </button>
+          </div>
         ))}
       </div>
     );
