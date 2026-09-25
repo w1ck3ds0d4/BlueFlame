@@ -20,7 +20,11 @@ const hashPath = path.join(root, "src", "tokens.css.sha256");
 
 async function main() {
   const write = process.argv.includes("--write");
-  const content = await readFile(tokensPath, "utf8");
+  // Normalize CRLF to LF before hashing. A Windows checkout with
+  // core.autocrlf=true keeps this file as CRLF on disk while git
+  // stores it (and CI checks it out) as LF; hashing the raw bytes made
+  // this check fail on CI for a file nobody had actually edited.
+  const content = (await readFile(tokensPath, "utf8")).replace(/\r\n/g, "\n");
   const actual = createHash("sha256").update(content).digest("hex");
 
   if (write) {
