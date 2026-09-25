@@ -33,8 +33,8 @@ Chrome. The core browser and the Claude channel are built in parallel.
       profile with none of Daniel's logins, a banner shows while Claude drives a tab, each new site
       needs approval, every action is logged, and nothing can read cookies or the password locker.
       Done when: Claude Code can open, read and operate a page in BlueFlame through the bridge.
-- [ ] **Streaming downloads**: `downloads.rs` buffers whole files in memory and refuses anything over
-      500 MB. Done when: downloads stream to disk with progress and no size cap.
+- [x] **Streaming downloads**: `downloads.rs` buffers whole files in memory and refuses anything over
+      500 MB. Done when: downloads stream to disk with progress and no size cap. (#105)
 - [ ] **Default browser on Windows**: register BlueFlame for http, https and .html so Windows lists
       it. Done when: BlueFlame can be picked in Settings > Default apps.
 - [ ] **Multiple windows**: every tab is a child of the single `main` window today. Done when: a tab
