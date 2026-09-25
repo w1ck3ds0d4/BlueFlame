@@ -665,6 +665,11 @@ pub async fn browser_open_tab(
 /// `browser_new_private_tab` uses. This is what the Claude control channel
 /// calls for its `open_tab` tool: every tab Claude drives starts with none
 /// of Daniel's cookies, storage or logins, whatever URL it's pointed at.
+///
+/// The control channel's only caller (`windows_impl::pipe`) is Windows-only,
+/// so this has no caller at all on other platforms in phase 1 - see
+/// `control::mod` for the matching `allow(dead_code)` on that side.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub async fn browser_open_private_tab(
     app: tauri::AppHandle,
     tabs: tauri::State<'_, Tabs>,

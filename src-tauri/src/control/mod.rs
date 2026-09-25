@@ -10,6 +10,13 @@
 //! Everything else here (the token, the approval gate, tab scoping, the
 //! action log, and tool dispatch) is plain Rust with no OS dependency, so it
 //! is unit tested on every CI platform, not just this laptop.
+//!
+//! On a non-Windows build the only caller of most of this (`ToolDispatcher::
+//! dispatch`, the pipe wire types, `SessionToken`) is `windows_impl::pipe`,
+//! which doesn't exist there - so from `-D warnings` clippy's point of view
+//! it is legitimately dead code on that platform, present purely so its own
+//! unit tests still run in Linux CI. Windows clippy stays fully strict.
+#![cfg_attr(not(windows), allow(dead_code))]
 
 pub mod approval;
 pub mod commands;
