@@ -888,6 +888,20 @@ button {
   color: var(--warn);
 }
 
+.tab-claude {
+  border-top: 1px solid var(--accent);
+}
+
+.tab-claude-badge {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  padding: 0 3px;
+}
+
 .tab-new-private {
   font-size: 11px;
   letter-spacing: -1px;
@@ -1537,6 +1551,25 @@ button {
 .error-banner::before {
   content: 'error: ';
   color: var(--danger);
+}
+
+.approval-bar {
+  margin: 8px 16px 0;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.approval-bar-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .brand {
@@ -3267,6 +3300,31 @@ html:has(.menu-popup-body) {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.downloads-page-active-list {
+  flex: none;
+  min-height: 0;
+  border-color: var(--accent, var(--border));
+}
+
+.download-row-active {
+  background: var(--surface-2, transparent);
+}
+
+.download-row-progress-track {
+  margin-top: 4px;
+  height: 4px;
+  width: 100%;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.download-row-progress-fill {
+  height: 100%;
+  background: var(--accent, var(--text));
+  transition: width 0.2s ease;
 }
 
 @media (max-width: 640px) {

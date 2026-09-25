@@ -33,9 +33,18 @@ Chrome. The core browser and the Claude channel are built in parallel.
       (WebView2's own DevTools calls, never an open remote-debugging port). Claude works in a separate
       profile with none of Daniel's logins, a banner shows while Claude drives a tab, each new site
       needs approval, every action is logged, and nothing can read cookies or the password locker.
-      Done when: Claude Code can open, read and operate a page in BlueFlame through the bridge.
-- [ ] **Streaming downloads**: `downloads.rs` buffers whole files in memory and refuses anything over
-      500 MB. Done when: downloads stream to disk with progress and no size cap.
+      Built in #107: the pipe, its ACL, the token handshake, tool dispatch, and the mcp-bridge are
+      implemented, with unit tests plus a real named-pipe/ACL/token-handshake/bridge end-to-end test
+      (`cargo test --all -- --ignored real_pipe_end_to_end_through_the_bridge` in `src-tauri`, needs
+      `pnpm install` in `mcp-bridge` first). No automated test drives a real WebView2 tab or a real
+      Claude Code session - both need a live window on Daniel's own machine, which an unattended test
+      here has no safe way to tell apart from his real daily-driver BlueFlame instance (same pipe name,
+      proxy port, and app-data-derived profile/CA). Nothing further needs building for phase 1. Done
+      when: Claude Code can open, read and operate a real page in BlueFlame through the bridge - Daniel
+      adds the bridge per README.md and runs that smoke test himself, then ticks this line.
+- [x] **Streaming downloads**: `downloads.rs` buffers whole files in memory and refuses anything over
+      500 MB. Done when: downloads stream to disk with progress and no size cap. (#105)
+- [ ] **Adopt the WickIT design system (flame accent)**: Daniel asked on 2026-09-25 for BlueFlame to share WickIT's design system in the Console register, with the flame as its accent and mark. The browser chrome (tab strip, address bar, panels, privacy dashboard, downloads, settings, the Claude approval bar) moves onto the kit's tokens (`tokens.css` copied verbatim from WickIT HQ's `Design System/Kits/` with a drift check), fonts and components; web pages themselves are never restyled. Placed before the remaining UI work so new screens are built in the final look. Done when: no colour, spacing or radius in `src/` bypasses a token, and the chrome has been checked against the kit at laptop width in dark and light.
 - [ ] **Default browser on Windows**: register BlueFlame for http, https and .html so Windows lists
       it. Done when: BlueFlame can be picked in Settings > Default apps.
 - [ ] **Multiple windows**: every tab is a child of the single `main` window today. Done when: a tab
@@ -50,6 +59,7 @@ Chrome. The core browser and the Claude channel are built in parallel.
 - [ ] **Password locker build**, after the design is signed off.
 - [ ] **Claude control channel, phase 2**: package the bridge as a one-click Claude desktop
       extension. Done when: the Claude desktop app can add BlueFlame's tools without editing config.
+- [ ] **Usability and accessibility pass**: Daniel asked on 2026-09-25 for his products to look better and be more user friendly and professional. Audit every screen with the nielsen-heuristics-audit, wcag-2.2-aa and web-design-guidelines skills, rank the findings, and fix the top ones (keyboard use, focus, contrast, empty and error states, copy). Done when: the audit is in `docs/` and every high-severity finding is fixed, with before and after screenshots at phone and laptop width.
 - [ ] **Tag v1.0.0 and cut a GitHub release** once the items above are done.
 
 ## Next
@@ -60,6 +70,15 @@ keychain>` so trust is one click, matching the Windows flow. Done when: a fresh 
 - [ ] **Linux CA auto-install**: detect distro family and wrap the correct
       `update-ca-certificates` or `trust anchor` invocation. Done when: a fresh Linux install can
       trust the CA without a manual command.
+### Linux parity (after Windows v1.0.0, decided by Daniel 2026-09-25)
+
+BlueFlame already builds and runs on Linux (WebKitGTK; CI builds and tests on Ubuntu; .deb, .rpm and AppImage bundles), but the security and Claude features are Windows-only today.
+
+- [ ] **CA key protected on Linux**: keep the root key in the TPM through tpm2-tss where one exists, otherwise in the kernel keyring, never as a plain file. Done when: no CA private key exists on disk on Linux either.
+- [ ] **Claude control channel on Linux**: the same token-gated protocol over a Unix socket restricted to the user (mode 0600), with the same InPrivate tabs, approval gate and action log. Done when: the MCP bridge drives a Linux BlueFlame window.
+- [ ] **Tab events on Linux**: carry right-click, middle-click and keys over WebKitGTK's private script message channel with the same marker and token as the Windows fix, instead of Tauri IPC (blocked for web pages). Done when: the BlueFlame menu opens on any web page on Linux.
+- [ ] **Password locker unlock on Linux**: TPM or keyring-held key with a user-presence check (fprintd or the system password) in place of Windows Hello, same threat model as docs/password-locker.md. Done when: the locker works on Linux with the same guarantees stated honestly.
+
 - [ ] **Proxy bypass list** for sites that reject intercepted certificates (some banking apps).
 
 ## Later
