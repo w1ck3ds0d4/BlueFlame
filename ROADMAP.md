@@ -21,12 +21,14 @@ Chrome. The core browser and the Claude channel are built in parallel.
       per-host cache, migrate an existing install (new root trusted, old root removed, old key file
       deleted), and fall back to a non-exportable software key only where no TPM exists. Done when:
       no CA private key exists on disk and the one-click, no-admin trust flow still works.
-- [ ] **Password locker design**: a built-in locker that cannot be bulk-stolen: its key is held by
-      the TPM (not bound to firmware measurements, so a BIOS update does not destroy it), every unlock
-      needs Windows Hello, autofill fills only the exact saved origin, page scripts and the Claude
-      channel can never read it, and an offline recovery code survives a TPM reset. Done when: a
-      design doc in `docs/` is signed off by Daniel. Doc drafted at `docs/password-locker.md`
-      (#104), still awaiting sign off, so this item stays unticked until Daniel signs off.
+- [ ] **Password locker design**: a built-in locker that cannot be bulk-stolen: its data key is
+      wrapped under a key derived from Daniel's master passphrase combined with a secret held by
+      the TPM (not bound to firmware measurements, so a BIOS update does not destroy it), every
+      unlock needs that passphrase plus a current authenticator app code (TOTP), autofill fills
+      only the exact saved origin, page scripts and the Claude channel can never read it, and a
+      recovery phrase survives a TPM reset or a lost phone. Done when: a design doc in `docs/` is
+      signed off by Daniel. Doc drafted at `docs/password-locker.md` (#104), still awaiting sign
+      off, so this item stays unticked until Daniel signs off.
 - [ ] **Claude control channel, phase 1**: a control server inside BlueFlame on a local named pipe
       with a per-session token, driven through a small MCP bridge, exposing a limited tool set (tabs,
       navigate, read page text and structure, click, type, scroll, screenshot) implemented in-process
@@ -77,7 +79,7 @@ BlueFlame already builds and runs on Linux (WebKitGTK; CI builds and tests on Ub
 - [ ] **CA key protected on Linux**: keep the root key in the TPM through tpm2-tss where one exists, otherwise in the kernel keyring, never as a plain file. Done when: no CA private key exists on disk on Linux either.
 - [ ] **Claude control channel on Linux**: the same token-gated protocol over a Unix socket restricted to the user (mode 0600), with the same InPrivate tabs, approval gate and action log. Done when: the MCP bridge drives a Linux BlueFlame window.
 - [ ] **Tab events on Linux**: carry right-click, middle-click and keys over WebKitGTK's private script message channel with the same marker and token as the Windows fix, instead of Tauri IPC (blocked for web pages). Done when: the BlueFlame menu opens on any web page on Linux.
-- [ ] **Password locker unlock on Linux**: TPM or keyring-held key with a user-presence check (fprintd or the system password) in place of Windows Hello, same threat model as docs/password-locker.md. Done when: the locker works on Linux with the same guarantees stated honestly.
+- [ ] **Password locker unlock on Linux**: the same passphrase-plus-authenticator-code scheme as Windows, with the TPM half sealed through tpm2-tss or the kernel keyring instead of NCrypt, no fprintd and no other user-presence check needed. Done when: the locker works on Linux with the same guarantees stated honestly.
 
 - [ ] **Proxy bypass list** for sites that reject intercepted certificates (some banking apps).
 
