@@ -9,7 +9,7 @@ Privacy-first browser shell. On desktop, an embedded MITM filter proxy strips tr
 ### Privacy + filtering
 
 - **Embedded MITM proxy** - intercepts all WebView traffic locally (HTTP and HTTPS) via the `hudsucker` crate
-- **Self-signed root CA** - generated on first run and persisted to the user data dir; key never leaves disk
+- **Self-signed root CA** - generated on first run; on Windows the private key lives in the TPM (or a non-exportable software key store if there's no TPM) and never touches disk, on other platforms it's persisted to the user data dir alongside the cert
 - **Built-in blocklist** - covers the worst offenders out of the box (doubleclick, GA, GTM, hotjar, mixpanel, segment, amplitude, fb pixels)
 - **Filter list support** - EasyPrivacy + EasyList subscribed by default, easylist-compatible rules compiled into SQLite, live-reload without restart
 - **Body analysis + reputation** - request/response analysis hooks plus a URL reputation pass for fingerprinting + tracking heuristics
@@ -101,7 +101,7 @@ On first run the app creates `blueflame-ca.crt`. Your OS needs to recognize it o
 | macOS | Not yet | `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain blueflame-ca.crt` |
 | Linux | Not yet | `sudo cp blueflame-ca.crt /usr/local/share/ca-certificates/ && sudo update-ca-certificates` |
 
-**Security note:** installing any root CA is a serious action - anyone who gets the CA private key could impersonate HTTPS sites on that machine. BlueFlame keeps the key locally in the app data dir alongside the cert. If you stop using BlueFlame, uninstall the CA from your trust store.
+**Security note:** installing any root CA is a serious action. On Windows the private key is generated inside CNG (the TPM via the Microsoft Platform Crypto Provider when one is present, otherwise the non-exportable Microsoft Software Key Storage Provider as a fallback) and never touches disk - every signature is produced by asking CNG to sign a hash, and there is no key file to copy. This does not protect against malware already running as you: it can still ask the TPM/CNG to sign new certificates for as long as it runs, it just can't take the key away to use later or on another machine. On macOS and Linux the key still lives in a plaintext file in the app data dir alongside the cert - if you get one of those, treat it the same way the old Windows behavior worked. If you stop using BlueFlame, uninstall the CA from your trust store.
 
 ### View stats
 
@@ -150,6 +150,7 @@ BlueFlame/
       commands.rs                       Tauri commands exposed to frontend
       proxy.rs                          hudsucker MITM proxy, stats, filtering
       ca.rs, ca_trust.rs, trust.rs      Root CA generation, persistence, OS trust install
+      ca_tpm.rs                         Windows: CNG/TPM-backed CA key + leaf signing
       tls_verifier.rs                   Custom TLS cert verification
       storage.rs                        SQLite (history, bookmarks, settings, filter lists, downloads)
       filter_parser.rs, list_loader.rs  EasyList rule parser + remote list fetcher

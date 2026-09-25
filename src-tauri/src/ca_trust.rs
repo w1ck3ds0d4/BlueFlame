@@ -54,6 +54,74 @@ pub fn install(cert_path: &Path) -> anyhow::Result<()> {
     }
 }
 
+/// Remove a specific cert from the user's Root store by SHA-1 thumbprint.
+/// Deliberately thumbprint-based rather than common-name-based: migrating
+/// to a new CA root must never take out some other cert that happens to
+/// share the BlueFlame CA's CN.
+pub fn remove_by_thumbprint(thumbprint: &str) -> anyhow::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        windows::remove_by_thumbprint(thumbprint)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        anyhow::bail!("removing a trust store entry by thumbprint is only implemented on Windows: {thumbprint}")
+    }
+}
+
+/// Abstraction over the trust-store install/remove calls, so CA migration
+/// logic can be unit tested without ever running `certutil` against
+/// whoever's real trust store the test happens to run under.
+#[cfg(target_os = "windows")]
+pub trait TrustOps: Send + Sync {
+    fn install(&self, cert_path: &Path) -> anyhow::Result<()>;
+    fn remove_by_thumbprint(&self, thumbprint: &str) -> anyhow::Result<()>;
+}
+
+/// The real, `certutil`-backed implementation used in production.
+#[cfg(target_os = "windows")]
+pub struct RealTrust;
+
+#[cfg(target_os = "windows")]
+impl TrustOps for RealTrust {
+    fn install(&self, cert_path: &Path) -> anyhow::Result<()> {
+        install(cert_path)
+    }
+
+    fn remove_by_thumbprint(&self, thumbprint: &str) -> anyhow::Result<()> {
+        remove_by_thumbprint(thumbprint)
+    }
+}
+
+#[cfg(target_os = "windows")]
+#[cfg(test)]
+pub mod testing {
+    use super::TrustOps;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+
+    /// Records what would have been installed/removed instead of ever
+    /// touching a real trust store.
+    #[derive(Default)]
+    pub struct FakeTrust {
+        pub installed: Mutex<Vec<PathBuf>>,
+        pub removed: Mutex<Vec<String>>,
+    }
+
+    impl TrustOps for FakeTrust {
+        fn install(&self, cert_path: &Path) -> anyhow::Result<()> {
+            self.installed.lock().unwrap().push(cert_path.to_path_buf());
+            Ok(())
+        }
+
+        fn remove_by_thumbprint(&self, thumbprint: &str) -> anyhow::Result<()> {
+            self.removed.lock().unwrap().push(thumbprint.to_string());
+            Ok(())
+        }
+    }
+}
+
 /// Open the folder containing the cert with the file selected.
 pub fn reveal(cert_path: &Path) -> anyhow::Result<PathBuf> {
     let dir = cert_path
@@ -110,6 +178,31 @@ mod windows {
     pub fn install(cert_path: &Path) -> anyhow::Result<()> {
         let out = std::process::Command::new("certutil")
             .args(["-user", "-addstore", "Root", &cert_path.to_string_lossy()])
+            .output()
+            .map_err(|e| anyhow::anyhow!("failed to run certutil: {e}"))?;
+
+        if out.status.success() {
+            return Ok(());
+        }
+
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        anyhow::bail!(
+            "certutil exited with {}: {}",
+            out.status,
+            if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            }
+        )
+    }
+
+    /// `certutil -delstore` matches on thumbprint (or CN, which we
+    /// deliberately never pass here) against the user-scope Root store.
+    pub fn remove_by_thumbprint(thumbprint: &str) -> anyhow::Result<()> {
+        let out = std::process::Command::new("certutil")
+            .args(["-user", "-delstore", "Root", thumbprint])
             .output()
             .map_err(|e| anyhow::anyhow!("failed to run certutil: {e}"))?;
 

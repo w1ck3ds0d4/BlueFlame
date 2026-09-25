@@ -598,17 +598,21 @@ dependencies = [
  "anyhow",
  "arti-client",
  "bytes",
+ "http",
  "http-body-util",
  "hudsucker",
  "hyper",
  "hyper-rustls",
  "hyper-util",
  "image",
+ "moka",
+ "pem 3.0.6",
  "percent-encoding",
  "rayon",
  "rcgen",
  "regex",
  "reqwest 0.12.28",
+ "ring",
  "rusqlite",
  "rustls",
  "rustls-pemfile",
@@ -621,6 +625,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tempfile",
  "thiserror 2.0.20",
+ "time",
  "tokio",
  "tokio-socks",
  "tokio-test",
@@ -630,6 +635,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "webpki-roots 1.0.9",
+ "windows-sys 0.60.2",
  "x509-parser",
 ]
 
@@ -4218,6 +4224,16 @@ checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
 
 [[package]]
 name = "pem"
+version = "3.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d30c53c26bc5b31a98cd02d20f25a7c8567146caf63ed593a9d87b2775291be"
+dependencies = [
+ "base64 0.22.1",
+ "serde_core",
+]
+
+[[package]]
+name = "pem"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d354a98a3d1251555de99e8fdd8afda05573c31b82f59063a7b0a29b5527f120"
@@ -5003,7 +5019,7 @@ version = "0.14.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8774e05a7d0de114588e6a28fe7e71694b82614ed569d86d8b389dfbc98b8ad8"
 dependencies = [
- "pem",
+ "pem 4.0.0",
  "ring",
  "rustls-pki-types",
  "time",

@@ -43,7 +43,7 @@ tor-rtcompat = { version = "0.44", default-features = false, features = ["tokio"
 # major as hudsucker's transitive dep - otherwise `KeyPair` and `Issuer`
 # types are duplicated across crate versions and the proxy builder
 # refuses our values.
-rcgen = "0.14"
+rcgen = { version = "0.14", features = ["x509-parser"] }
 rustls = "0.23"
 rustls-pemfile = "2"
 # Parse upstream-server certificates for trust-score signals (issuer,
@@ -108,6 +108,27 @@ built-in-tor = ["dep:arti-client", "dep:tor-rtcompat"]
 # feature would try to link macOS-only symbols.
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri = { version = "2", features = ["macos-proxy"] }
+
+# The root CA key lives in CNG (TPM-backed when possible) instead of a
+# plaintext file - see `src/ca_tpm.rs`. Windows-only; every other platform
+# keeps the existing on-disk `rcgen::KeyPair`.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.60", features = ["Win32_Security_Cryptography"] }
+# SHA-256 for hashing certs before signing through CNG, and SHA-1 for the
+# trust-store thumbprint used to remove a superseded root during migration.
+# Already a transitive dependency of `rcgen`'s default "ring" feature; named
+# directly so `ca_tpm.rs` doesn't rely on that staying true.
+ring = "0.17"
+# Only used to pull the raw DER out of a CA cert PEM for thumbprinting
+# during legacy-key migration. Already a transitive dependency of `rcgen`'s
+# "pem" feature.
+pem = "3"
+# Per-host leaf certificate cache for `ca_tpm::TpmAuthority`, matching what
+# hudsucker's own `RcgenAuthority` uses (not reusable directly: it isn't
+# re-exported).
+moka = { version = "0.12", features = ["future"] }
+time = "0.3"
+http = "1"
 
 [dev-dependencies]
 tokio-test = "0.4"
