@@ -24,6 +24,7 @@ mod security;
 mod session;
 mod socks_connector;
 mod storage;
+mod tab_channel;
 mod tls_verifier;
 mod trust;
 mod util;

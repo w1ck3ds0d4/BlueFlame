@@ -145,37 +145,32 @@ pub enum TabEvent {
     },
 }
 
-/// Tauri IPC entry point invoked by the per-tab init script for every
-/// right-click, middle-click, dismiss, and keyboard relay event. We
-/// dropped the previous proxy-based HTTP sentinel because page CSP
-/// `connect-src` directives blocked the request before the MITM proxy
-/// ever saw it (sendBeacon returned true but the browser silently
-/// dropped the network call). IPC bypasses CSP entirely because it
-/// rides Tauri's postMessage bridge, not a network request.
-///
-/// Token check is preserved so a hostile page that monkey-patches
-/// `__TAURI_INTERNALS__.invoke` can't fabricate events without first
-/// scraping the token out of the (function-scoped) init script.
-#[tauri::command]
-pub fn submit_tab_event(
-    tx_state: tauri::State<'_, SharedContextMenuTx>,
-    token_state: tauri::State<'_, SharedContextToken>,
-    token: String,
-    event: TabEvent,
-) -> Result<(), String> {
-    let expected: &str = &token_state;
-    if token.len() != expected.len() {
-        return Err("token length mismatch".into());
+/// Constant-time token comparison shared by every entry point that
+/// authenticates a tab event: the Tauri command below (all platforms)
+/// and the Windows-only WebView2 `postMessage` channel in
+/// `tab_channel.rs`. Length is compared up front (not constant-time,
+/// but leaks only a byte count, not content) then every byte pair is
+/// XORed and OR-accumulated so a mismatch on the first byte doesn't
+/// return any faster than a mismatch on the last.
+pub(crate) fn token_matches(expected: &str, actual: &str) -> bool {
+    if expected.len() != actual.len() {
+        return false;
     }
     let mut diff = 0u8;
-    for (a, b) in expected.as_bytes().iter().zip(token.as_bytes()) {
+    for (a, b) in expected.as_bytes().iter().zip(actual.as_bytes()) {
         diff |= a ^ b;
     }
-    if diff != 0 {
-        return Err("token mismatch".into());
-    }
+    diff == 0
+}
 
-    let request = match event {
+/// Turn a validated `TabEvent` into the `ContextMenuRequest` the
+/// consumer task understands. Shared by `submit_tab_event` (the Tauri
+/// IPC path, used on every platform for local content and as the
+/// non-Windows fallback for remote pages) and the Windows `postMessage`
+/// channel in `tab_channel.rs`, so both entry points open the exact
+/// same popup with the exact same validation.
+pub(crate) fn tab_event_to_request(event: TabEvent) -> Result<ContextMenuRequest, String> {
+    Ok(match event {
         TabEvent::Open {
             page,
             x,
@@ -206,13 +201,47 @@ pub fn submit_tab_event(
             }
             ContextMenuRequest::OpenInNewTab { url }
         }
-    };
+    })
+}
 
+/// Push a request into the consumer-task channel. Silent no-op if the
+/// sender was never installed or has been dropped - same behavior
+/// `submit_tab_event` always had.
+pub(crate) fn route_tab_event(tx_state: &SharedContextMenuTx, request: ContextMenuRequest) {
     if let Ok(g) = tx_state.lock() {
         if let Some(tx) = g.as_ref() {
             let _ = tx.send(request);
         }
     }
+}
+
+/// Tauri IPC entry point invoked by the per-tab init script for every
+/// right-click, middle-click, dismiss, and keyboard relay event on
+/// non-Windows platforms. On Windows this is only a fallback: the
+/// init script normally posts events over the private WebView2
+/// `postMessage` channel handled in `tab_channel.rs`, because Tauri 2
+/// refuses IPC from remote origins (no `remote` block is granted here
+/// on purpose - see `tab-webviews.json`) and most real pages are
+/// remote. We dropped the previous proxy-based HTTP sentinel because
+/// page CSP `connect-src` directives blocked the request before the
+/// MITM proxy ever saw it (sendBeacon returned true but the browser
+/// silently dropped the network call).
+///
+/// Token check is preserved so a hostile page that monkey-patches
+/// `__TAURI_INTERNALS__.invoke` can't fabricate events without first
+/// scraping the token out of the (function-scoped) init script.
+#[tauri::command]
+pub fn submit_tab_event(
+    tx_state: tauri::State<'_, SharedContextMenuTx>,
+    token_state: tauri::State<'_, SharedContextToken>,
+    token: String,
+    event: TabEvent,
+) -> Result<(), String> {
+    if !token_matches(&token_state, &token) {
+        return Err("token mismatch".into());
+    }
+    let request = tab_event_to_request(event)?;
+    route_tab_event(&tx_state, request);
     Ok(())
 }
 
@@ -344,4 +373,108 @@ pub fn hide_context_menu(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn close_context_menu(app: tauri::AppHandle) -> Result<(), String> {
     hide_context_menu(app)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_matches_accepts_identical_tokens() {
+        assert!(token_matches("abc123", "abc123"));
+    }
+
+    #[test]
+    fn token_matches_rejects_different_length() {
+        assert!(!token_matches("abc123", "abc1234"));
+    }
+
+    #[test]
+    fn token_matches_rejects_same_length_mismatch() {
+        assert!(!token_matches("abc123", "abc124"));
+    }
+
+    #[test]
+    fn tab_event_to_request_builds_open_payload() {
+        let event = TabEvent::Open {
+            page: "https://example.com".into(),
+            x: 12.0,
+            y: 34.0,
+            link: Some("https://example.com/link".into()),
+            link_text: Some("".into()),
+            image: None,
+            sel: Some("hello".into()),
+        };
+        let request = tab_event_to_request(event).unwrap();
+        match request {
+            ContextMenuRequest::Open(payload) => {
+                assert_eq!(payload.page_url, "https://example.com");
+                assert_eq!(
+                    payload.link_url.as_deref(),
+                    Some("https://example.com/link")
+                );
+                // Empty strings are normalized to None.
+                assert_eq!(payload.link_text, None);
+                assert_eq!(payload.image_url, None);
+                assert_eq!(payload.selection_text.as_deref(), Some("hello"));
+            }
+            _ => panic!("expected Open request"),
+        }
+    }
+
+    #[test]
+    fn tab_event_to_request_rejects_empty_kbd_key() {
+        let event = TabEvent::Kbd {
+            key: String::new(),
+            shift: false,
+        };
+        assert!(tab_event_to_request(event).is_err());
+    }
+
+    #[test]
+    fn tab_event_to_request_rejects_empty_middleclick_url() {
+        let event = TabEvent::Middleclick { url: String::new() };
+        assert!(tab_event_to_request(event).is_err());
+    }
+
+    #[test]
+    fn tab_event_to_request_passes_through_dismiss_and_kbd_and_middleclick() {
+        assert!(matches!(
+            tab_event_to_request(TabEvent::Dismiss).unwrap(),
+            ContextMenuRequest::Dismiss
+        ));
+        assert!(matches!(
+            tab_event_to_request(TabEvent::Kbd {
+                key: "t".into(),
+                shift: true,
+            })
+            .unwrap(),
+            ContextMenuRequest::KeyboardShortcut { key, shift } if key == "t" && shift
+        ));
+        assert!(matches!(
+            tab_event_to_request(TabEvent::Middleclick {
+                url: "https://example.com".into(),
+            })
+            .unwrap(),
+            ContextMenuRequest::OpenInNewTab { url } if url == "https://example.com"
+        ));
+    }
+
+    #[test]
+    fn route_tab_event_delivers_to_receiver() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<ContextMenuRequest>();
+        let tx_state: SharedContextMenuTx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+        route_tab_event(&tx_state, ContextMenuRequest::Dismiss);
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            ContextMenuRequest::Dismiss
+        ));
+    }
+
+    #[test]
+    fn route_tab_event_is_a_noop_with_no_sender() {
+        let tx_state: SharedContextMenuTx = std::sync::Arc::new(std::sync::Mutex::new(None));
+        // Must not panic even though nothing is listening.
+        route_tab_event(&tx_state, ContextMenuRequest::Dismiss);
+    }
 }

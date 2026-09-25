@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "tab-webviews",
-  "description": "Per-tab webview capability. Grants the IPC bridge so the injected init script can call submit_tab_event to relay right-click / middle-click / keyboard events to the shell, and grants internal_toggle_devtools so the context menu's Inspect item can open native DevTools on the active tab.",
+  "description": "Per-tab webview capability. Grants the IPC bridge so the injected init script can call submit_tab_event to relay right-click / middle-click / keyboard events to the shell on non-Windows platforms and on local content; on Windows the same events normally travel over a private WebView2 postMessage channel instead (see tab_channel.rs), which needs no capability entry because it bypasses Tauri IPC entirely. No 'remote' URL block is granted here on purpose: that would hand every website the app's commands (tabs, settings, downloads, the Claude control channel), so submit_tab_event stays unreachable from remote pages by design. Also grants internal_toggle_devtools so the context menu's Inspect item can open native DevTools on the active tab.",
   "windows": ["main"],
   "webviews": ["browse-*"],
   "permissions": [
