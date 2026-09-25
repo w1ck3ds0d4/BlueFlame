@@ -598,6 +598,8 @@ dependencies = [
  "anyhow",
  "arti-client",
  "bytes",
+ "futures-util",
+ "http-body",
  "http-body-util",
  "hudsucker",
  "hyper",
