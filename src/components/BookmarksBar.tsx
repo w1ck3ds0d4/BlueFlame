@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bookmark as BookmarkIcon, ChevronRight, Folder } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 
 interface Bookmark {
@@ -26,8 +27,6 @@ interface FolderGroup {
 
 export function BookmarksBar({ version, onOpened }: Props) {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
-  const [openFolder, setOpenFolder] = useState<string | null>(null);
-  const barRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     invoke<Bookmark[]>('bookmark_list')
@@ -35,20 +34,9 @@ export function BookmarksBar({ version, onOpened }: Props) {
       .catch(() => setBookmarks([]));
   }, [version]);
 
-  // Close the open folder when clicking outside the bar.
-  useEffect(() => {
-    if (openFolder === null) return;
-    function handler(e: MouseEvent) {
-      if (!barRef.current?.contains(e.target as Node)) setOpenFolder(null);
-    }
-    window.addEventListener('mousedown', handler);
-    return () => window.removeEventListener('mousedown', handler);
-  }, [openFolder]);
-
   const { rootChips, folderGroups } = useMemo(() => groupByTopFolder(bookmarks), [bookmarks]);
 
   async function open(url: string) {
-    setOpenFolder(null);
     try {
       await invoke('browser_navigate_active', { url });
       onOpened();
@@ -57,8 +45,31 @@ export function BookmarksBar({ version, onOpened }: Props) {
     }
   }
 
+  // A folder's contents open as a menu-popup child webview (the same
+  // mechanism the hamburger and kebab menus use), not a DOM dropdown:
+  // this bar sits right above the active tab's native WebView2, and a
+  // DOM dropdown here rendered underneath that webview wherever the
+  // two overlapped. The chosen bookmark comes back as a
+  // `blueflame:navigate-to` event, which App.tsx turns into the same
+  // browser_navigate_active + refresh this component's own `open`
+  // above does.
+  function openFolderMenu(g: FolderGroup, btn: HTMLButtonElement) {
+    const rect = btn.getBoundingClientRect();
+    const items = g.items.map(({ bookmark, subpath }) => ({
+      url: bookmark.url,
+      title: subpath ? `${subpath}/${labelFor(bookmark)}` : labelFor(bookmark),
+    }));
+    invoke('open_menu_popup', {
+      kind: 'bookmarks-folder',
+      anchorX: rect.left,
+      anchorY: rect.bottom + 4,
+      folder: g.name,
+      items: JSON.stringify(items),
+    }).catch(() => undefined);
+  }
+
   return (
-    <div className="bookmarks-bar" role="toolbar" aria-label="Bookmarks" ref={barRef}>
+    <div className="bookmarks-bar" role="toolbar" aria-label="Bookmarks">
       {bookmarks.length === 0 ? (
         <span className="bookmarks-empty">// star a page to pin it here</span>
       ) : (
@@ -70,45 +81,22 @@ export function BookmarksBar({ version, onOpened }: Props) {
               onClick={() => open(b.url)}
               title={b.url}
             >
-              <span className="bookmark-chip-star" aria-hidden>
-                ★
-              </span>
+              <BookmarkIcon className="bookmark-chip-icon" aria-hidden size={13} strokeWidth={1.75} />
               <span className="bookmark-chip-label">{labelFor(b)}</span>
             </button>
           ))}
           {folderGroups.map((g) => (
-            <div key={g.name} className="bookmark-folder">
-              <button
-                className={`bookmark-chip bookmark-folder-chip ${openFolder === g.name ? 'open' : ''}`}
-                onClick={() => setOpenFolder(openFolder === g.name ? null : g.name)}
-                aria-haspopup="true"
-                aria-expanded={openFolder === g.name}
-                title={`${g.name} (${g.items.length})`}
-              >
-                <span className="bookmark-folder-icon" aria-hidden>
-                  ▸
-                </span>
-                <span className="bookmark-chip-label">{g.name}</span>
-              </button>
-              {openFolder === g.name && (
-                <div className="bookmark-folder-panel" role="menu">
-                  {g.items.map(({ bookmark, subpath }) => (
-                    <button
-                      key={bookmark.url}
-                      className="bookmark-folder-item"
-                      onClick={() => open(bookmark.url)}
-                      title={bookmark.url}
-                      role="menuitem"
-                    >
-                      {subpath && (
-                        <span className="bookmark-folder-item-path">{subpath}/</span>
-                      )}
-                      <span className="bookmark-folder-item-label">{labelFor(bookmark)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <button
+              key={g.name}
+              className="bookmark-chip bookmark-folder-chip"
+              onClick={(e) => openFolderMenu(g, e.currentTarget)}
+              aria-haspopup="menu"
+              title={`${g.name} (${g.items.length})`}
+            >
+              <Folder className="bookmark-chip-icon" aria-hidden size={13} strokeWidth={1.75} />
+              <span className="bookmark-chip-label">{g.name}</span>
+              <ChevronRight className="bookmark-folder-chevron" aria-hidden size={12} strokeWidth={2} />
+            </button>
           ))}
         </>
       )}

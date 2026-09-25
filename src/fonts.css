@@ -1,0 +1,26 @@
+/* The WickIT kit's two other faces. tokens.css names them (--font-sans is
+   Inter, --font-display is Space Grotesk) and only declares the mono
+   font-face itself; these are the latin cuts the kit vendors, served from
+   public/fonts with their licences beside them, so nothing is fetched
+   from Google Fonts. A privacy browser does not phone home for its own
+   chrome.
+
+   JetBrains Mono is not redeclared here. tokens.css's own @font-face for
+   it points at a path relative to itself ("fonts/..."), so the actual
+   fix is vendoring that same file under src/fonts/ (see
+   src/fonts/OFL.txt for its licence): Vite resolves and bundles that
+   url() against the CSS file it lives next to, the same way it would
+   for any other stylesheet asset reference, so the browser only ever
+   requests a real, hashed file and never the broken kit-relative path. */
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('/fonts/inter/inter-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap;
+  src: url('/fonts/inter/inter-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 600; font-display: swap;
+  src: url('/fonts/inter/inter-latin-600-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 500; font-display: swap;
+  src: url('/fonts/space-grotesk/space-grotesk-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 600; font-display: swap;
+  src: url('/fonts/space-grotesk/space-grotesk-latin-600-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url('/fonts/space-grotesk/space-grotesk-latin-700-normal.woff2') format('woff2'); }

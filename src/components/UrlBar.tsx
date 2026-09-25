@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ShieldBan } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import type { TrustAssessment } from './TrustPopup';
 
@@ -390,42 +391,42 @@ export function UrlBar({
         )}
       </div>
 
-      <span
-        className={`block-counter ${blocksForHost > 0 ? 'block-counter-on' : 'block-counter-off'}`}
-        title={
-          browsing
-            ? `${blocksForHost} trackers blocked on this site`
-            : 'open a page to see per-site blocks'
-        }
-        aria-label={`${blocksForHost} blocks on this site`}
-      >
-        <span className="block-counter-glyph" aria-hidden>
-          ▒
-        </span>
-        <span className="block-counter-num">{blocksForHost}</span>
-      </span>
-
-      <button
-        className={`nav-icon url-trust ${trust ? `url-trust-${trust.label}` : 'url-trust-idle'}`}
-        onClick={() => {
-          if (!browsing || !currentUrl) return;
-          if (trustOpen) {
-            invoke('close_trust_panel').catch(() => undefined);
-            setTrustOpen(false);
-          } else {
-            invoke('open_trust_panel', { url: currentUrl, tab: 'overview' }).catch(
-              () => undefined,
-            );
-            setTrustOpen(true);
+      <div className="status-group" role="group" aria-label="site status">
+        <span
+          className={`block-counter ${blocksForHost > 0 ? 'block-counter-on' : 'block-counter-off'}`}
+          title={
+            browsing
+              ? `${blocksForHost} trackers blocked on this site`
+              : 'open a page to see per-site blocks'
           }
-        }}
-        disabled={!browsing}
-        title={trust ? `site scan: ${trust.label} (${trust.score})` : 'site scan'}
-        aria-label="site scan"
-        aria-expanded={trustOpen}
-      >
-        {trust ? trust.score : '!'}
-      </button>
+          aria-label={`${blocksForHost} trackers blocked on this site`}
+        >
+          <ShieldBan className="block-counter-glyph" aria-hidden size={13} strokeWidth={1.75} />
+          <span className="block-counter-num">{blocksForHost}</span>
+        </span>
+
+        <button
+          className={`nav-icon url-trust ${trust ? `url-trust-${trust.label}` : 'url-trust-idle'}`}
+          onClick={() => {
+            if (!browsing || !currentUrl) return;
+            if (trustOpen) {
+              invoke('close_trust_panel').catch(() => undefined);
+              setTrustOpen(false);
+            } else {
+              invoke('open_trust_panel', { url: currentUrl, tab: 'overview' }).catch(
+                () => undefined,
+              );
+              setTrustOpen(true);
+            }
+          }}
+          disabled={!browsing}
+          title={trust ? `site scan: ${trust.label} (${trust.score})` : 'site scan: not run yet'}
+          aria-label={trust ? `site scan: ${trust.label}, score ${trust.score}` : 'site scan not run yet'}
+          aria-expanded={trustOpen}
+        >
+          {trust ? trust.score : '!'}
+        </button>
+      </div>
 
       <button
         className={`nav-icon url-star ${bookmarked ? 'url-star-on' : ''}`}

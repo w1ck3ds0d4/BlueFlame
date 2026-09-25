@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { PersonalIndex } from './PersonalIndex';
 import { BRAILLE_FRAMES, useAsciiFrames } from '../ascii';
+import { getStoredTheme, setStoredTheme, type Theme } from '../theme';
 
 interface FilterListEntry {
   name: string;
@@ -61,6 +62,7 @@ export function Settings() {
   const [repFeeds, setRepFeeds] = useState<ReputationFeed[]>([]);
   const [repRefreshing, setRepRefreshing] = useState(false);
   const [lastRepRefresh, setLastRepRefresh] = useState<RefreshResult | null>(null);
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
   const [mobileUa, setMobileUa] = useState(false);
   const [blockAds, setBlockAds] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +113,11 @@ export function Settings() {
       setBlockAds(!next);
       setError(String(e));
     }
+  }
+
+  function onThemeChange(next: Theme) {
+    setTheme(next);
+    setStoredTheme(next);
   }
 
   async function onBrowserModeChange(next: boolean) {
@@ -305,6 +312,36 @@ export function Settings() {
       {error && <div className="error">{error}</div>}
 
       <PersonalIndex />
+
+      <div className="panel">
+        <div className="panel-header">
+          <h3>appearance</h3>
+        </div>
+        <div className="panel-note">
+          BlueFlame's chrome follows the WickIT design system. Dark is the
+          default; light is available for daytime use.
+        </div>
+        <div className="engine-grid">
+          <label className={`engine-choice ${theme === 'default' ? 'engine-active' : ''}`}>
+            <input
+              type="radio"
+              name="appearance"
+              checked={theme === 'default'}
+              onChange={() => onThemeChange('default')}
+            />
+            <span>dark</span>
+          </label>
+          <label className={`engine-choice ${theme === 'light' ? 'engine-active' : ''}`}>
+            <input
+              type="radio"
+              name="appearance"
+              checked={theme === 'light'}
+              onChange={() => onThemeChange('light')}
+            />
+            <span>light</span>
+          </label>
+        </div>
+      </div>
 
       <div className="panel">
         <div className="panel-header">
