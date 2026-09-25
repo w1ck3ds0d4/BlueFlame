@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** release: path to v1.0.0. **Last reviewed:** 2026-09-24.
+**Status:** release: path to v1.0.0 as Daniel's daily browser. **Last reviewed:** 2026-09-25.
 
 BlueFlame is a privacy-first desktop browser shell with an embedded transparent MITM proxy
 that filters every request and response, Tor integration via `arti-client`, and cross-platform
@@ -10,19 +10,46 @@ release.
 
 > How this file is used: Claude Project threads build the first unticked item under **Now**, one item per branch and pull request, and tick it in that same PR as `- [x] ... (#PR)`. Daniel owns the order and the lists; threads never add to Now, Next or Later themselves, they propose under **Ideas**.
 
-## Now (path to v1.0.0)
+## Now (daily driver and Claude control, decided by Daniel 2026-09-25)
 
-- [ ] **Add the missing CI gates**: `cargo fmt --check` and `cargo clippy -D warnings` already
-      run; add `cargo test`, `pnpm tsc --noEmit` (already present), `pnpm build` (already
-      present), and a `tauri build` job so a broken bundle fails CI rather than being found by
-      hand. Done when: `.github/workflows/ci.yml` runs a full `tauri build` on at least Windows.
-- [ ] **Write the test suite**: unit tests for the filter parser (`filter_parser.rs`), storage
-      (`storage.rs` LIKE search), and MITM hooks (`proxy.rs`, `tls_verifier.rs`). Done when: `cargo
-test --all` covers all three and runs in CI.
-- [ ] **Clear the 8 open Dependabot alerts** and fix the failing glib/rand/@babel bump PRs.
-      Done when: the alert count is at or near zero and CI is green on the dependency PRs.
-- [ ] **Tag v1.0.0 and cut a GitHub release** once CI and tests are green. Done when: the
-      `v1.0.0` tag exists and a GitHub release is published with release notes.
+BlueFlame replaces Opera GX as Daniel's daily browser, and Claude can drive it the way it drives
+Chrome. The core browser and the Claude channel are built in parallel.
+
+- [ ] **CA private key in the TPM**: `ca.rs` writes the root key as a plain PEM file, so anything
+      running as Daniel can copy it and later intercept all his TLS. Create the key inside the TPM
+      (Microsoft Platform Crypto Provider, non-exportable), sign leaf certificates through it with a
+      per-host cache, migrate an existing install (new root trusted, old root removed, old key file
+      deleted), and fall back to a non-exportable software key only where no TPM exists. Done when:
+      no CA private key exists on disk and the one-click, no-admin trust flow still works.
+- [ ] **Password locker design**: a built-in locker that cannot be bulk-stolen: its key is held by
+      the TPM (not bound to firmware measurements, so a BIOS update does not destroy it), every unlock
+      needs Windows Hello, autofill fills only the exact saved origin, page scripts and the Claude
+      channel can never read it, and an offline recovery code survives a TPM reset. Done when: a
+      design doc in `docs/` is signed off by Daniel.
+- [ ] **Claude control channel, phase 1**: a control server inside BlueFlame on a local named pipe
+      with a per-session token, driven through a small MCP bridge, exposing a limited tool set (tabs,
+      navigate, read page text and structure, click, type, scroll, screenshot) implemented in-process
+      (WebView2's own DevTools calls, never an open remote-debugging port). Claude works in a separate
+      profile with none of Daniel's logins, a banner shows while Claude drives a tab, each new site
+      needs approval, every action is logged, and nothing can read cookies or the password locker.
+      Done when: Claude Code can open, read and operate a page in BlueFlame through the bridge.
+- [ ] **Streaming downloads**: `downloads.rs` buffers whole files in memory and refuses anything over
+      500 MB. Done when: downloads stream to disk with progress and no size cap.
+- [ ] **Default browser on Windows**: register BlueFlame for http, https and .html so Windows lists
+      it. Done when: BlueFlame can be picked in Settings > Default apps.
+- [ ] **Multiple windows**: every tab is a child of the single `main` window today. Done when: a tab
+      can move to a new window and session restore brings the windows back.
+- [ ] **Update mechanism**: Tauri updater with signed update bundles; the signing key stays with
+      Daniel. Done when: an installed copy updates itself from a signed release.
+- [ ] **Opera GX import**: bookmarks and history, never passwords. Done when: one action imports
+      both from Opera GX's profile.
+- [ ] **Windows build and installer in CI**: CI builds only on Linux today. Done when: CI runs a full
+      `tauri build` on Windows and publishes a signed installer on release.
+- [ ] **Clear the 8 open Dependabot alerts**. Done when: the alert count is at or near zero.
+- [ ] **Password locker build**, after the design is signed off.
+- [ ] **Claude control channel, phase 2**: package the bridge as a one-click Claude desktop
+      extension. Done when: the Claude desktop app can add BlueFlame's tools without editing config.
+- [ ] **Tag v1.0.0 and cut a GitHub release** once the items above are done.
 
 ## Next
 
@@ -32,13 +59,14 @@ keychain>` so trust is one click, matching the Windows flow. Done when: a fresh 
 - [ ] **Linux CA auto-install**: detect distro family and wrap the correct
       `update-ca-certificates` or `trust anchor` invocation. Done when: a fresh Linux install can
       trust the CA without a manual command.
+- [ ] **Proxy bypass list** for sites that reject intercepted certificates (some banking apps).
 
 ## Later
 
 - Filter exception rule (`@@`) parsing and the most-impactful `$options` (`$third-party`,
   `$script`, `$image`, `$domain=`)
 - Settings UI buttons for filter list and reputation feed refresh
-- Signed installers per platform (MSI, NSIS, APK, DMG, AppImage) attached to the release
+- Signed installers for the other platforms (APK, DMG, AppImage) attached to the release
 - iOS shell via `WKContentRuleList`, once a Mac is available for the build
 - FTS5 history search (replacing the current `LIKE` search)
 - Surfacing Tor circuit details in the UI
@@ -51,12 +79,14 @@ keychain>` so trust is one click, matching the Windows flow. Done when: a fresh 
 ## Out of scope for v1
 
 - Sync across devices (no telemetry, no cloud, by design)
-- Browser extension / WebExtension support
+- Browser extension / WebExtension support (the password locker is built in instead)
+- A remote-debugging port as a shipped feature (the Claude channel is in-process and token-gated)
 - Any telemetry pipeline or analytics
 - Replacing the regex-based filter engine with a full ad-block engine
 
 ## Done
 
+- [x] Test suite: filter parser, storage, TLS verifier, proxy and more, run by `cargo test --all` in CI
 - [x] v0.2.0 (2026-05-18): YouTube ad blocking, ad/tracker master toggle, trust-score chip
       severity fix, hudsucker 0.24 / rcgen 0.14 port
 - [x] Windows browser shell with MITM proxy + WebView2 routing, one-click no-admin CA install
