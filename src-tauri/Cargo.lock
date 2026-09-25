@@ -597,7 +597,9 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "arti-client",
+ "async-trait",
  "bytes",
+ "getrandom 0.2.17",
  "http-body-util",
  "hudsucker",
  "hyper",
@@ -630,6 +632,8 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "webpki-roots 1.0.9",
+ "webview2-com",
+ "windows 0.61.3",
  "x509-parser",
 ]
 

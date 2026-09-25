@@ -1,0 +1,18 @@
+{
+  "name": "blueflame-mcp-bridge",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Stdio MCP server that bridges Claude Code to BlueFlame's local control pipe",
+  "type": "module",
+  "main": "index.mjs",
+  "bin": {
+    "blueflame-mcp-bridge": "index.mjs"
+  },
+  "scripts": {
+    "start": "node index.mjs",
+    "test": "node --test test/pipe-client.test.mjs test/tools.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  }
+}

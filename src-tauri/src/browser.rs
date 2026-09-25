@@ -505,7 +505,10 @@ const YOUTUBE_AD_SKIP_INIT_SCRIPT_TEMPLATE: &str = r#"
 })();
 "#;
 
-fn tab_label(id: u64) -> String {
+// `pub(crate)` (rather than private) so the Claude control-channel dispatcher
+// in `control::dispatch` can resolve a tab id to its webview label the same
+// way every command in this file does, instead of duplicating the format.
+pub(crate) fn tab_label(id: u64) -> String {
     format!("browse-{id}")
 }
 
@@ -656,6 +659,18 @@ pub async fn browser_open_tab(
     url: String,
 ) -> Result<TabsView, String> {
     open_tab_impl(app, tabs, url, false).await
+}
+
+/// Open `url` in a fresh private tab, the same InPrivate profile
+/// `browser_new_private_tab` uses. This is what the Claude control channel
+/// calls for its `open_tab` tool: every tab Claude drives starts with none
+/// of Daniel's cookies, storage or logins, whatever URL it's pointed at.
+pub async fn browser_open_private_tab(
+    app: tauri::AppHandle,
+    tabs: tauri::State<'_, Tabs>,
+    url: String,
+) -> Result<TabsView, String> {
+    open_tab_impl(app, tabs, url, true).await
 }
 
 async fn open_tab_impl(
