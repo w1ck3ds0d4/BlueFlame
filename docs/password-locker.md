@@ -9,7 +9,12 @@ design only, so this PR touches docs and nothing else.
 - Unlock is a master passphrase plus a current code from an authenticator app (TOTP), in place of
   the earlier Windows Hello plan.
 - Revealing a saved password in plain text always needs a fresh authenticator code.
-- The recovery phrase is about 12 words, written on paper.
+- The recovery phrase is about 12 words from the BIP-39 English word list, written on paper.
+- Five consecutive failed unlocks lock the locker for one hour (see "Brute-force limits").
+- The authenticator app is Google Authenticator. If its Google account sync is switched on, the
+  code's secret also lives in that Google account, so that account's own two-step verification
+  matters; with sync off, a lost phone is handled by the recovery phrase.
+- Daniel signed off this design on 2026-09-25.
 
 ## Why
 
@@ -59,7 +64,7 @@ the locker without also having Daniel's passphrase and running on this specific 
 | Malicious script on a page Daniel is actually visiting (XSS, hostile ad, compromised dependency) | The script has no JavaScript API that returns saved entries. A fill only happens after a genuine, browser verified user gesture, checked with the same signal browsers use to distinguish a real click from a script generated one, and only into the field that gesture targeted. | Once a value lands in a form field on that page, any script already running on that page can read it back out of the field, same as with every browser's native autofill. This is not specific to BlueFlame and is not solvable without breaking normal form filling. |
 | A compromised Claude session, or a malicious prompt reaching the control channel | The MCP tool set the control channel exposes has no read, list, or export tool for the locker, the TOTP secret, or any wrapped key, at the bridge layer, not just by convention. The bridge also refuses to open or read the locker's own UI route for any automated navigation or read-page call. Autofill and unlock trigger require a real OS level input event; Claude's click and type tools do not produce that signal and are rejected. | A compromised Claude session could still ask Daniel, through the chat, to type his passphrase and code and read something back to it himself, which is a social engineering risk this design cannot close by itself. |
 | TPM reset (BIOS update, CMOS clear, motherboard replacement, clean reinstall) | The TPM-held secret is gone, so the data key cannot be unwrapped through the passphrase path anymore. The recovery phrase, stretched with Argon2id, derives a second key that also unwraps the data key, so Daniel can re-wrap it under a freshly provisioned TPM secret. | Without the recovery phrase, the locker is unrecoverable. That is intentional: anything that could recover it without the phrase would also be a second way to steal it. |
-| Someone repeatedly guessing the passphrase or TOTP codes at the unlock screen | Failed attempts are counted in the database, not in memory, and each one after the third adds an increasing delay before the next attempt is even accepted; after ten consecutive failures the locker locks out entirely for a period that grows with every further attempt made during the lockout. | A very strong, rarely reused passphrase and treating the authenticator app itself as sensitive (screen lock on the phone) are still Daniel's job; the lockout raises the cost of guessing, it does not make a weak passphrase strong. |
+| Someone repeatedly guessing the passphrase or TOTP codes at the unlock screen | Failed attempts are counted in the database, not in memory, and the 3rd and 4th add a short delay before the next attempt is accepted; after five consecutive failures the locker locks out entirely for an hour, extended by every further attempt made during the lockout. | A very strong, rarely reused passphrase and treating the authenticator app itself as sensitive (screen lock on the phone) are still Daniel's job; the lockout raises the cost of guessing, it does not make a weak passphrase strong. |
 
 ### What this does not stop, said plainly
 
@@ -191,14 +196,15 @@ Failures are counted per locker, not per unlock screen session, and the count li
 `locker_meta` in the SQLite database, so quitting BlueFlame, restarting Windows, or killing the
 process does not reset it.
 
-- Attempts 1 through 3 after a successful unlock (or after a clean start) are checked immediately,
+- Attempts 1 and 2 after a successful unlock (or after a clean start) are checked immediately,
   with no added delay.
-- From the 4th consecutive failure onward, BlueFlame adds a delay before the next attempt is even
-  read from the form: `min(2^(failures - 3), 300)` seconds, so the wait grows from 2 seconds up to
-  a 5 minute cap.
-- After 10 consecutive failures, the locker enters a hard lockout: no attempt is processed at all,
-  correct or not, for 30 minutes. Trying again during a lockout extends it by another 30 minutes,
-  so repeatedly hammering the unlock screen only makes the wait longer.
+- The 3rd and 4th consecutive failures add a short delay before the next attempt is even read
+  from the form: 5 seconds, then 15 seconds.
+- After 5 consecutive failures, the locker enters a hard lockout: no attempt is processed at all,
+  correct or not, for 1 hour. Trying again during a lockout extends it by another hour, so
+  repeatedly hammering the unlock screen only makes the wait longer. Daniel chose this stricter
+  setting on 2026-09-25 knowing a few typos can lock him out for an hour; the recovery phrase
+  clears a lockout at any time.
 - A failure on either the passphrase or the TOTP code counts as one failure toward this same
   counter; BlueFlame does not give an attacker a separate, larger budget for one factor by telling
   them which one was wrong.
@@ -300,8 +306,8 @@ does not sit in clipboard history indefinitely.
 ## Recovery phrase
 
 At setup, after the TPM secret and the TOTP secret are both sealed, BlueFlame generates a strong,
-passphrase grade secret (a long random value shown as a phrase of about 12 words, similar to a
-diceware phrase, to be written on paper) and shows it to Daniel exactly once, with a clear warning
+passphrase grade secret (a long random value shown as a phrase of about 12 words from the BIP-39
+English word list, to be written on paper) and shows it to Daniel exactly once, with a clear warning
 to write it down somewhere offline and separate from the laptop. It is never stored anywhere in
 BlueFlame, on disk or otherwise. Losing it is fine as long as the TPM secret and the authenticator
 app both keep working; it only matters on the day one of them stops.
@@ -430,14 +436,5 @@ likely each split into two or three smaller pull requests as they get built.
 
 ## Open questions for Daniel
 
-- The lockout curve above (delay from the 4th failure, hard lockout after 10) is a proposed
-  default, not something Daniel has confirmed. Is that too strict or too lenient given how often
-  he expects to fumble a code?
-- Recovery phrase word list: Daniel already decided on a written word phrase over a QR code, but
-  not which word list to draw it from. The design below assumes the standard BIP-39 English list
-  (2048 words, used only for its word list and encoding, see the crates section) because it is
-  the most common choice and every wallet-style app Daniel might reference already uses it. Is
-  that the right list, or does Daniel want a plain diceware list instead?
-- Is there a specific authenticator app Daniel already uses (Google Authenticator, Aegis, 2FAS,
-  or something else), so the phase 3 acceptance check is run against that exact app rather than
-  just RFC 6238 test vectors?
+None. The lockout curve, the recovery word list and the authenticator app were settled on
+2026-09-25 (see "Decisions made by Daniel").

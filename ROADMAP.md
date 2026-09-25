@@ -21,14 +21,14 @@ Chrome. The core browser and the Claude channel are built in parallel.
       per-host cache, migrate an existing install (new root trusted, old root removed, old key file
       deleted), and fall back to a non-exportable software key only where no TPM exists. Done when:
       no CA private key exists on disk and the one-click, no-admin trust flow still works.
-- [ ] **Password locker design**: a built-in locker that cannot be bulk-stolen: its data key is
+- [x] **Password locker design**: a built-in locker that cannot be bulk-stolen: its data key is
       wrapped under a key derived from Daniel's master passphrase combined with a secret held by
       the TPM (not bound to firmware measurements, so a BIOS update does not destroy it), every
       unlock needs that passphrase plus a current authenticator app code (TOTP), autofill fills
       only the exact saved origin, page scripts and the Claude channel can never read it, and a
       recovery phrase survives a TPM reset or a lost phone. Done when: a design doc in `docs/` is
       signed off by Daniel. Doc drafted at `docs/password-locker.md` (#104), still awaiting sign
-      off, so this item stays unticked until Daniel signs off.
+      off, so this item stays unticked until Daniel signs off. Signed off by Daniel on 2026-09-25. (#104)
 - [ ] **Claude control channel, phase 1**: a control server inside BlueFlame on a local named pipe
       with a per-session token, driven through a small MCP bridge, exposing a limited tool set (tabs,
       navigate, read page text and structure, click, type, scroll, screenshot) implemented in-process
