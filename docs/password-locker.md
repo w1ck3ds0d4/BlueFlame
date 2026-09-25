@@ -3,6 +3,12 @@
 Status: draft, waiting on Daniel's sign off. Nothing in this document is built yet. This is a
 design only, so this PR touches docs and nothing else.
 
+## Decisions made by Daniel (2026-09-25)
+
+- Auto-lock after 5 minutes of no locker activity.
+- Revealing a saved password in plain text always needs a fresh Windows Hello gesture.
+- The recovery code is a phrase of about 12 words, written on paper.
+
 ## Why
 
 Daniel's Opera GX profile was the target of an infostealer in July 2026. The stealer read the
@@ -95,7 +101,7 @@ design below replaces that step with direct TPM wrap and unwrap, which has no su
    in memory only, never written to disk unwrapped.
 5. The data key decrypts locker entries on demand, one at a time, for as long as the locker
    stays unlocked.
-6. A short auto-lock timer (a few minutes of no locker activity, configurable) zeroes the data
+6. A short auto-lock timer (5 minutes of no locker activity by default, configurable) zeroes the data
    key out of memory and returns to the locked state. Reaching for a saved password after that
    needs a fresh Windows Hello gesture, which means a fresh `NCryptDecrypt` call.
 
@@ -168,6 +174,13 @@ passphrase back.
 - The data key decrypts one entry, fills it, and the decrypted plaintext is dropped immediately
   after; it is not cached for other fields or other tabs.
 
+## Revealing a saved password
+
+Showing a saved password as plain text on screen always asks for a fresh Windows Hello gesture,
+even while the locker is unlocked. Autofill into the exact saved origin rides on the current
+unlock; revealing does not, because it is the one action that puts a password where anything
+watching the screen can read it.
+
 ## Clipboard
 
 A "copy password" action puts the plaintext on the system clipboard and starts a short timer
@@ -178,7 +191,8 @@ does not sit in clipboard history indefinitely.
 ## Recovery code
 
 At setup, after the TPM key is created, BlueFlame generates a strong, passphrase grade secret
-(a long random value shown as a word list, similar to a diceware phrase) and shows it to Daniel
+(a long random value shown as a phrase of about 12 words, similar to a diceware phrase, to be
+written on paper) and shows it to Daniel
 exactly once, with a clear warning to write it down somewhere offline and separate from the
 laptop. It is never stored anywhere in BlueFlame, on disk or otherwise. Losing it is fine as long
 as the TPM key keeps working; it only matters on the day the TPM key stops working.
