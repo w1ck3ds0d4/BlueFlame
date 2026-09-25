@@ -1,7 +1,40 @@
+import type { ComponentType } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { ShieldBan } from 'lucide-react';
+import {
+  Bookmark,
+  BookmarkCheck,
+  ShieldAlert,
+  ShieldBan,
+  ShieldCheck,
+  ShieldQuestion,
+  ShieldX,
+} from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import type { TrustAssessment } from './TrustPopup';
+import type { TrustAssessment, TrustLabel } from './TrustPopup';
+
+type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
+
+// The status map: one place that turns a trust label into a tone and
+// an icon, so no call site below picks a colour or a glyph by hand.
+// "idle" (scan not run yet) reads the same as a positive result:
+// neutral, calm, no warning implied.
+type StatusTone = 'neutral' | 'warn' | 'danger';
+
+const TRUST_TONE: Record<TrustLabel | 'idle', StatusTone> = {
+  idle: 'neutral',
+  trusted: 'neutral',
+  ok: 'neutral',
+  suspect: 'warn',
+  danger: 'danger',
+};
+
+const TRUST_ICON: Record<TrustLabel | 'idle', IconType> = {
+  idle: ShieldQuestion,
+  trusted: ShieldCheck,
+  ok: ShieldCheck,
+  suspect: ShieldAlert,
+  danger: ShieldX,
+};
 
 interface Suggestion {
   url: string;
@@ -295,6 +328,11 @@ export function UrlBar({
     onHome();
   }
 
+  const trustLabel = trust ? trust.label : 'idle';
+  const trustTone = TRUST_TONE[trustLabel];
+  const TrustIcon = TRUST_ICON[trustLabel];
+  const BookmarkIcon = bookmarked ? BookmarkCheck : Bookmark;
+
   return (
     <div className="url-bar-row" role="toolbar" aria-label="Browser chrome">
       <button
@@ -406,7 +444,7 @@ export function UrlBar({
         </span>
 
         <button
-          className={`nav-icon url-trust ${trust ? `url-trust-${trust.label}` : 'url-trust-idle'}`}
+          className={`url-trust status-tone-${trustTone}`}
           onClick={() => {
             if (!browsing || !currentUrl) return;
             if (trustOpen) {
@@ -421,23 +459,26 @@ export function UrlBar({
           }}
           disabled={!browsing}
           title={trust ? `site scan: ${trust.label} (${trust.score})` : 'site scan: not run yet'}
-          aria-label={trust ? `site scan: ${trust.label}, score ${trust.score}` : 'site scan not run yet'}
+          aria-label={
+            trust ? `site scan: ${trust.label}, score ${trust.score}` : 'site scan: not run yet'
+          }
           aria-expanded={trustOpen}
         >
-          {trust ? trust.score : '!'}
+          <TrustIcon aria-hidden size={13} strokeWidth={1.75} />
+          <span>{trust ? trust.score : '--'}</span>
+        </button>
+
+        <button
+          className={`url-star ${bookmarked ? 'status-tone-active' : ''}`}
+          onClick={toggleBookmark}
+          disabled={!bookmarkable}
+          title={bookmarked ? 'remove bookmark' : 'add bookmark'}
+          aria-label={bookmarked ? 'remove bookmark' : 'add bookmark'}
+          aria-pressed={bookmarked}
+        >
+          <BookmarkIcon aria-hidden size={13} strokeWidth={1.75} />
         </button>
       </div>
-
-      <button
-        className={`nav-icon url-star ${bookmarked ? 'url-star-on' : ''}`}
-        onClick={toggleBookmark}
-        disabled={!bookmarkable}
-        title={bookmarked ? 'remove bookmark' : 'add bookmark'}
-        aria-label={bookmarked ? 'remove bookmark' : 'add bookmark'}
-        aria-pressed={bookmarked}
-      >
-        {bookmarked ? '*' : '+'}
-      </button>
 
       <button className="nav-primary" onClick={submit}>
         go
