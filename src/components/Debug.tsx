@@ -8,10 +8,19 @@ interface DebugEntry {
   message: string;
 }
 
+interface ClaudeLogEntry {
+  ts_ms: number;
+  tab_id: number | null;
+  tool: string;
+  detail: string;
+  outcome: string;
+}
+
 type LevelFilter = 'all' | 'error' | 'warn' | 'info';
 
 const POLL_MS = 1000;
 const DISPLAY_LIMIT = 500;
+const CLAUDE_LOG_LIMIT = 50;
 
 export function Debug() {
   const [entries, setEntries] = useState<DebugEntry[]>([]);
@@ -21,6 +30,7 @@ export function Debug() {
   const [clearing, setClearing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [claudeLog, setClaudeLog] = useState<ClaudeLogEntry[]>([]);
 
   async function refresh() {
     try {
@@ -50,6 +60,23 @@ export function Debug() {
     const id = window.setInterval(refresh, POLL_MS);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paused]);
+
+  useEffect(() => {
+    async function pollClaudeLog() {
+      try {
+        const list = await invoke<ClaudeLogEntry[]>('control_recent_log', {
+          limit: CLAUDE_LOG_LIMIT,
+        });
+        setClaudeLog(list);
+      } catch {
+        // control channel state not managed yet (still starting, or non-Windows) - stay empty
+      }
+    }
+    pollClaudeLog();
+    if (paused) return;
+    const id = window.setInterval(pollClaudeLog, POLL_MS);
+    return () => window.clearInterval(id);
   }, [paused]);
 
   // Auto-scroll to newest when follow is on and entries change.
@@ -121,6 +148,27 @@ export function Debug() {
                   {e.target}
                 </span>
                 <span className="debug-msg">{e.message}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="debug-header">
+        <h2 className="settings-title">claude activity</h2>
+      </div>
+      <div className="debug-scroll">
+        {claudeLog.length === 0 ? (
+          <div className="debug-empty">// no Claude control-channel activity yet</div>
+        ) : (
+          <ul className="debug-list">
+            {claudeLog.map((e, i) => (
+              <li key={`${e.ts_ms}-${i}`} className={`debug-row ${e.outcome === 'ok' ? '' : 'debug-error'}`}>
+                <span className="debug-ts">{fmtTime(e.ts_ms / 1000)}</span>
+                <span className="debug-target" title={e.tab_id !== null ? `tab ${e.tab_id}` : ''}>
+                  {e.tool}
+                </span>
+                <span className="debug-msg">{e.outcome === 'ok' ? e.detail : e.outcome}</span>
               </li>
             ))}
           </ul>

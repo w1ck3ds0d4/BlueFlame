@@ -7,6 +7,7 @@ mod ca_tpm;
 mod ca_trust;
 mod commands;
 mod context_menu;
+mod control;
 mod debug_log;
 mod downloads;
 #[cfg(feature = "built-in-tor")]
@@ -57,9 +58,10 @@ use context_menu::{
     close_context_menu, hide_context_menu, show_context_menu, submit_tab_event,
     SharedContextMenuTx, SharedContextToken,
 };
+use control::commands::{control_recent_log, control_respond_approval};
 use downloads::{
-    downloads_clear, downloads_list, downloads_open, downloads_reveal, DownloadsLog,
-    SharedDownloadsLog,
+    downloads_cancel, downloads_clear, downloads_list, downloads_open, downloads_reveal,
+    ActiveDownloads, DownloadsLog, SharedActiveDownloads, SharedDownloadsLog,
 };
 use import_export::{export_data, import_bookmarks_html, import_data};
 use metrics::{get_system_metrics, MetricsCollector, SharedMetrics};
@@ -131,6 +133,7 @@ pub fn run() {
         .manage(context_token.clone())
         .manage(context_tx_shared.clone())
         .manage::<SharedDownloadsLog>(Arc::new(DownloadsLog::default()))
+        .manage::<SharedActiveDownloads>(Arc::new(ActiveDownloads::default()))
         .manage::<SharedMetrics>(Arc::new(MetricsCollector::default()))
         .setup(move |app| {
             // Open the personal-index store so commands can rely on it being in state.
@@ -143,6 +146,23 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = start_proxy_at_boot(&app_handle, proxy_state, PROXY_PORT).await {
                     tracing::error!(error = ?e, "failed to auto-start proxy at boot");
+                }
+            });
+
+            // Claude control channel: named pipe + MCP bridge target. The
+            // dispatcher is managed as Tauri state as soon as it exists so
+            // `control_respond_approval` / `control_recent_log` never race
+            // its creation; `control::start` itself decides whether the
+            // pipe server actually runs (Windows only in phase 1).
+            let control_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match control::start(&control_handle).await {
+                    Ok(dispatcher) => {
+                        control_handle.manage::<control::SharedDispatcher>(dispatcher);
+                    }
+                    Err(e) => {
+                        tracing::error!(error = ?e, "failed to start Claude control channel");
+                    }
                 }
             });
 
@@ -320,8 +340,11 @@ pub fn run() {
             get_system_metrics,
             downloads_list,
             downloads_clear,
+            downloads_cancel,
             downloads_open,
             downloads_reveal,
+            control_respond_approval,
+            control_recent_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running BlueFlame");
@@ -414,6 +437,7 @@ async fn start_proxy_at_boot(
     let context_token: std::sync::Arc<String> = (*app.state::<SharedContextToken>()).clone();
     let context_tx = (*app.state::<SharedContextMenuTx>()).clone();
     let downloads_log: SharedDownloadsLog = (*app.state::<SharedDownloadsLog>()).clone();
+    let active_downloads: SharedActiveDownloads = (*app.state::<SharedActiveDownloads>()).clone();
 
     let runner = proxy::start(
         port,
@@ -428,6 +452,7 @@ async fn start_proxy_at_boot(
         context_tx,
         app.clone(),
         downloads_log,
+        active_downloads,
     )
     .await?;
 

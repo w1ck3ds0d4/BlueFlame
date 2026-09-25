@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { ApprovalBar } from './components/ApprovalBar';
 import { Bookmarks } from './components/Bookmarks';
 import { Downloads } from './components/Downloads';
 import { BookmarksBar } from './components/BookmarksBar';
@@ -58,6 +59,7 @@ export default function App() {
   const [browseVisible, setBrowseVisible] = useState(false);
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
+  const [claudeTabIds, setClaudeTabIds] = useState<number[]>([]);
   const [status, setStatus] = useState<ProxyStatus>({
     running: false,
     port: 0,
@@ -205,6 +207,26 @@ export default function App() {
       unlisten?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Tabs the Claude control channel opened, for the tab strip badge. A tab
+  // leaving this list (closed, or Claude done with it) is handled by the
+  // regular tabs-changed refresh filtering it out of `tabs` entirely.
+  useEffect(() => {
+    let unlisten: UnlistenFn | undefined;
+    listen<{ tab_id: number; driving: boolean }>('blueflame:claude-tab', (e) => {
+      const { tab_id, driving } = e.payload;
+      setClaudeTabIds((ids) =>
+        driving ? [...new Set([...ids, tab_id])] : ids.filter((id) => id !== tab_id),
+      );
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => undefined);
+    return () => {
+      unlisten?.();
+    };
   }, []);
 
   // Refs so the menu-popup event listeners see the latest active tab
@@ -481,6 +503,7 @@ export default function App() {
                 await onNewPrivateTab();
                 await showBrowser();
               }}
+              claudeTabIds={claudeTabIds}
             />
 
             <BookmarksBar
@@ -497,6 +520,7 @@ export default function App() {
       </header>
 
       {error && <div className="error-banner">{error}</div>}
+      <ApprovalBar />
 
       {browsing ? (
         <div className="browse-stage" aria-label="Browse area - the native webview renders below" />

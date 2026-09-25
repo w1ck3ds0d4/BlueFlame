@@ -28,6 +28,14 @@ Privacy-first browser shell. On desktop, an embedded MITM filter proxy strips tr
 - **New-tab page + branded UI** - gradient logo, lucide icon set across navigation
 - **Mobile (Android) chrome** - WebView's native `shouldInterceptRequest` does the filtering, no proxy or CA trust step needed; dedicated mobile UI components
 
+### Claude control channel
+
+- **Local control pipe** - token-gated Windows named pipe, ACL'd to the current user, no remote-debugging port
+- **MCP bridge** - stdio MCP server Claude Code starts directly; tabs, navigate, read page, click, type, key, scroll, screenshot
+- **InPrivate by default** - every tab Claude opens carries none of Daniel's logins, badged in the tab strip
+- **Per-origin approval gate** - the first action on a new site asks in the UI and remembers the answer
+- **Action log** - every tool call recorded, viewable in the Debug panel or as JSON lines on disk
+
 ### Storage + observability
 
 - **SQLite storage** - history, bookmarks, settings, filter lists, downloads stored locally
@@ -119,6 +127,38 @@ Failures (bad HTTP, malformed lines, invalid regex) are logged and skipped - a s
 
 Invoke the `refresh_filter_lists` Tauri command (or, later, click Refresh in Settings) to re-download on demand. The command returns `{ lists_ok, lists_failed, patterns_active }`.
 
+### Claude control channel
+
+BlueFlame runs a local control server so Claude Code can drive it the way it drives Chrome: open a tab, read the page, click, type. Phase 1 (this one) covers the channel itself; see `ROADMAP.md` for what is still ahead.
+
+**How it works:**
+
+- On launch, BlueFlame writes a random per-session token to `<app_data>/control/token` and opens a Windows named pipe at `\\.\pipe\blueflame-control`. Both the pipe and the token file carry an ACL restricted to the current Windows user - nothing else on the machine, not even another user account or an administrator process, can read the token or connect to the pipe. The pipe refuses any connection whose first message doesn't carry a byte-for-byte match of that token.
+- A small Node script, `mcp-bridge/`, is a stdio MCP server that Claude Code starts as a subprocess. It reads the token file and speaks newline-delimited JSON to the pipe. It never opens a network port itself.
+- Every tab Claude opens is InPrivate (no cookies, storage or logins from Daniel's regular browsing) and shows a `C` badge in the tab strip. The first tool call against a new origin blocks until you answer an in-app prompt (Allow/Deny); your answer is remembered for the rest of that origin's lifetime. Every call is appended to `<app_data>/control/action-log.jsonl`, and the last 50 show up in the Debug view.
+- Page actions (`get_page_text`, `read_page`, `find`, `click`, `type`, `key`, `scroll`, `screenshot`) run in-process against the tab's own WebView2 instance via `ICoreWebView2::CallDevToolsProtocolMethod` - the same DevTools Protocol Chrome DevTools uses, just called directly rather than over a remote-debugging port. BlueFlame never opens one.
+
+**Adding the bridge to Claude Code** (do this yourself; nothing here edits your Claude config):
+
+```bash
+cd mcp-bridge
+pnpm install
+claude mcp add --transport stdio blueflame -- node "$(pwd)/index.mjs"
+```
+
+Start BlueFlame first - the bridge reads its token file at startup and exits if BlueFlame hasn't written one yet. The bridge only supports Windows in phase 1, matching the control server.
+
+See `SECURITY.md` for exactly what the channel can and can't reach.
+
+**Testing it:** `src-tauri`'s usual `cargo test --all` covers the token, the approval gate, and tool dispatch on every platform. On Windows there's also a real, OS-level end-to-end test that isn't part of the default run (it spawns a real named pipe and the real `mcp-bridge` process, so it needs `pnpm install` in `mcp-bridge/` first):
+
+```bash
+cd src-tauri
+cargo test --all -- --ignored real_pipe_end_to_end_through_the_bridge
+```
+
+That test proves the pipe, its ACL, the token handshake, and the bridge's real MCP protocol all work together; it does not open a real WebView2 tab. Actually driving a page - the one thing left before ticking phase 1 off in `ROADMAP.md` - is the manual smoke test above: add the bridge, start BlueFlame, and ask Claude to open, read, click and type on a real page.
+
 ## Project structure
 
 ```
@@ -166,11 +206,21 @@ BlueFlame/
       import_export.rs                  Settings JSON + Netscape bookmarks HTML
       security.rs                       Security utility surface
       debug_log.rs, util.rs             Logging + helpers
+      control/                          Claude control channel
+        mod.rs                          Entry point, non-Windows stub
+        token.rs, approval.rs, log.rs,  Session token, per-origin approval
+          tabs.rs, protocol.rs, dispatch.rs  gate, action log, tab scoping, tool dispatch
+        commands.rs                     Tauri commands for the approval prompt + log viewer
+        windows_impl/                   Windows-only: named pipe, ACL, DevTools calls
     Cargo.toml                          Rust deps (tauri, hudsucker, rcgen, rusqlite,
-                                          arti-client, tor-rtcompat)
+                                          arti-client, tor-rtcompat, webview2-com)
     tauri.conf.json                     Tauri app config
     gen/android/                        Android Studio + Gradle project
     build.rs                            Build-time code gen
+  mcp-bridge/                           Stdio MCP server bridging Claude Code to the control pipe
+    index.mjs                           MCP server entry (tools/list, tools/call)
+    pipe-client.mjs                     Named-pipe client: handshake + request/response framing
+    tools.mjs                           Tool definitions shared with the tests
   .github/
     workflows/ci.yml                    Build + test
     dependabot.yml

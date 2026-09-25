@@ -32,9 +32,17 @@ Chrome. The core browser and the Claude channel are built in parallel.
       (WebView2's own DevTools calls, never an open remote-debugging port). Claude works in a separate
       profile with none of Daniel's logins, a banner shows while Claude drives a tab, each new site
       needs approval, every action is logged, and nothing can read cookies or the password locker.
-      Done when: Claude Code can open, read and operate a page in BlueFlame through the bridge.
-- [ ] **Streaming downloads**: `downloads.rs` buffers whole files in memory and refuses anything over
-      500 MB. Done when: downloads stream to disk with progress and no size cap.
+      Built in #107: the pipe, its ACL, the token handshake, tool dispatch, and the mcp-bridge are
+      implemented, with unit tests plus a real named-pipe/ACL/token-handshake/bridge end-to-end test
+      (`cargo test --all -- --ignored real_pipe_end_to_end_through_the_bridge` in `src-tauri`, needs
+      `pnpm install` in `mcp-bridge` first). No automated test drives a real WebView2 tab or a real
+      Claude Code session - both need a live window on Daniel's own machine, which an unattended test
+      here has no safe way to tell apart from his real daily-driver BlueFlame instance (same pipe name,
+      proxy port, and app-data-derived profile/CA). Nothing further needs building for phase 1. Done
+      when: Claude Code can open, read and operate a real page in BlueFlame through the bridge - Daniel
+      adds the bridge per README.md and runs that smoke test himself, then ticks this line.
+- [x] **Streaming downloads**: `downloads.rs` buffers whole files in memory and refuses anything over
+      500 MB. Done when: downloads stream to disk with progress and no size cap. (#105)
 - [ ] **Default browser on Windows**: register BlueFlame for http, https and .html so Windows lists
       it. Done when: BlueFlame can be picked in Settings > Default apps.
 - [ ] **Multiple windows**: every tab is a child of the single `main` window today. Done when: a tab
