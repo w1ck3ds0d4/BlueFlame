@@ -1,0 +1,67 @@
+/* Styling for the design-preview-only switcher panel. Loaded only by
+   design-main.tsx, never by the production entry. */
+
+.design-switcher {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 99999;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.design-switcher-toggle {
+  background: #ff5a1f;
+  color: #150900;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.design-switcher-panel {
+  margin-top: 6px;
+  background: #17181c;
+  border: 1px solid #33353c;
+  border-radius: 8px;
+  padding: 10px;
+  width: 240px;
+  max-height: 70vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+}
+
+.design-switcher-group + .design-switcher-group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #2a2c33;
+}
+
+.design-switcher-heading {
+  color: #8a8f9c;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+  margin-bottom: 6px;
+}
+
+.design-switcher-link {
+  display: block;
+  color: #d9e3ef;
+  text-decoration: none;
+  padding: 5px 6px;
+  border-radius: 4px;
+}
+
+.design-switcher-link:hover {
+  background: #24262d;
+}
+
+.design-switcher-link-active {
+  background: #ff5a1f;
+  color: #150900;
+  font-weight: 700;
+}

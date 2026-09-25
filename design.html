@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/blueflame-logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BlueFlame - design preview</title>
+    <!--
+      Development-only page. Mounts src/design-main.tsx, which installs
+      the Tauri API mocks before the real BlueFlame chrome mounts, so
+      the UI can be seen and screenshotted in a plain browser. Never
+      referenced by index.html and never part of `pnpm build`'s output;
+      see docs/DESIGN_PREVIEW.md.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #0d0d0d;
+        color: #d9e3ef;
+      }
+      #root {
+        min-height: 100vh;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/design-main.tsx"></script>
+  </body>
+</html>

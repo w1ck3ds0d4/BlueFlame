@@ -7,8 +7,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "postbuild": "node scripts/check-no-design-in-build.mjs",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "dev:design": "vite --open /design.html",
+    "build:design": "vite build --config vite.design.config.ts",
+    "shots": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/shots.ps1"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
