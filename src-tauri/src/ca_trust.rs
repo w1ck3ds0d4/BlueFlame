@@ -105,10 +105,17 @@ pub mod testing {
     pub struct FakeTrust {
         pub installed: Mutex<Vec<PathBuf>>,
         pub removed: Mutex<Vec<String>>,
+        /// When set, `install` fails without recording anything, so tests
+        /// can exercise what happens when trusting the new root does not
+        /// go through (see the migration-ordering test in ca.rs).
+        pub fail_install: bool,
     }
 
     impl TrustOps for FakeTrust {
         fn install(&self, cert_path: &Path) -> anyhow::Result<()> {
+            if self.fail_install {
+                anyhow::bail!("simulated trust-store install failure");
+            }
             self.installed.lock().unwrap().push(cert_path.to_path_buf());
             Ok(())
         }
