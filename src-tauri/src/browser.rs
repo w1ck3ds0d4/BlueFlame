@@ -55,14 +55,16 @@ const MOBILE_USER_AGENT: &str = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleW
 /// JS injected into every tab webview so right-click / long-press
 /// surfaces the BlueFlame context menu instead of the native one.
 /// The handler captures target info (link, image, selection, page
-/// URL) + click coordinates, then fires a POST to the sentinel host
-/// `blueflame.ipc` via `navigator.sendBeacon`. The MITM proxy matches
-/// that host and emits a Rust-side request to open the popup.
+/// URL) + click coordinates, then hands the event to Rust over
+/// whichever channel is available (see `dispatch()` below): on
+/// Windows, `window.chrome.webview.postMessage` straight to a
+/// dedicated `WebMessageReceived` handler (`tab_channel.rs`); on
+/// other platforms, the `submit_tab_event` Tauri IPC command.
 ///
 /// The per-launch token prevents a malicious page from forging its
-/// own context-menu requests: only the injected script knows the
-/// token. The template replaces `__BF_TOKEN__` at webview-creation
-/// time so each BlueFlame run gets a fresh value.
+/// own context-menu requests on either channel: only the injected
+/// script knows the token. The template replaces `__BF_TOKEN__` at
+/// webview-creation time so each BlueFlame run gets a fresh value.
 ///
 /// Long-press threshold: 500 ms, matching Android/iOS convention.
 /// Scroll (touchmove beyond ~10 px) cancels the press so legitimate
@@ -70,14 +72,6 @@ const MOBILE_USER_AGENT: &str = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleW
 const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
 (function () {
     var BF_TOKEN = "__BF_TOKEN__";
-    // Tauri IPC bridge. We used to POST to a fake `blueflame.ipc` host
-    // that the MITM proxy intercepted, but page CSP `connect-src`
-    // directives (Wikipedia, GitHub, most modern apps) silently
-    // dropped the call before it left the webview - sendBeacon would
-    // even return true because the browser had queued it, but the
-    // request never made it past CSP. IPC is not a network call, so
-    // CSP does not apply. The tab-webviews capability grants this
-    // webview access to the bridge.
     var LONG_PRESS_MS = 500;
     var MOVE_CANCEL_PX = 10;
 
@@ -104,11 +98,27 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
         }
     }
 
-    // Dispatch a tab event over the Tauri IPC bridge. Silent failure
-    // by design - if the capability isn't granted or the bridge isn't
-    // injected (rare, would mean Tauri config drifted), we'd rather
-    // do nothing than break the page.
+    // Dispatch a tab event to Rust. Windows first: window.chrome.webview
+    // is WebView2's own postMessage bridge, delivered to a dedicated
+    // WebMessageReceived handler on the Rust side (tab_channel.rs) that
+    // Tauri's own IPC bridge does not intercept or interfere with. That
+    // channel works from remote pages, where Tauri IPC does not: Tauri 2
+    // refuses invoke() calls from a remote origin unless the webview's
+    // capability grants a "remote" URL block, which tab-webviews.json
+    // deliberately does not (that would hand every website the app's
+    // commands). Everywhere else, fall back to the Tauri IPC bridge,
+    // which still works for local content (the new-tab page, tauri.
+    // localhost) on every platform. Silent failure by design in both
+    // branches - if neither channel is available, we'd rather do
+    // nothing than break the page.
     function dispatch(event) {
+        try {
+            var webview2 = window.chrome && window.chrome.webview;
+            if (webview2 && typeof webview2.postMessage === "function") {
+                webview2.postMessage({ bf: "tab-event", token: BF_TOKEN, event: event });
+                return;
+            }
+        } catch (_) { /* fall through to the Tauri IPC bridge below */ }
         try {
             var ipc = window.__TAURI_INTERNALS__;
             if (!ipc || typeof ipc.invoke !== "function") return;
@@ -813,10 +823,11 @@ async fn open_tab_impl(
                 }
                 // Context-menu bridge runs on every tab regardless of
                 // mobile/desktop mode: the handler swallows right-click
-                // AND long-press events + posts the target metadata to
-                // the `blueflame.ipc` sentinel host, which the proxy
-                // intercepts and turns into a popup. Token is
-                // per-launch so a malicious page can't forge requests.
+                // AND long-press events and posts the target metadata to
+                // Rust (Windows: the private postMessage channel below;
+                // other platforms: the submit_tab_event IPC command).
+                // Token is per-launch so a malicious page can't forge
+                // requests on either channel.
                 let token = crate::context_menu::current_token(&app_clone);
                 let ctx_script = CONTEXT_MENU_INIT_SCRIPT_TEMPLATE.replace("__BF_TOKEN__", &token);
                 b = b.initialization_script(ctx_script);
@@ -846,9 +857,27 @@ async fn open_tab_impl(
                 // Mobile mode centers a phone-sized rectangle; desktop
                 // fills the full content area below the chrome.
                 let (pos, size) = active_tab_bounds(&app_clone);
-                main.add_child(b, pos, size)
-                    .map(|_| ())
-                    .map_err(|e| format!("add_child webview: {e}"))
+                // Only read back on Windows (see below); on other
+                // platforms the returned handle has no further use.
+                #[allow(unused_variables)]
+                let created = main
+                    .add_child(b, pos, size)
+                    .map_err(|e| format!("add_child webview: {e}"))?;
+                // Windows: attach the private postMessage channel so
+                // right-click / middle-click / keyboard-relay events
+                // reach the shell even on remote pages, where Tauri IPC
+                // is refused (see tab_channel.rs). Fire-and-forget: the
+                // Tauri IPC command stays wired up as the fallback.
+                #[cfg(target_os = "windows")]
+                crate::tab_channel::attach_to_webview(
+                    &created,
+                    app_clone
+                        .state::<crate::context_menu::SharedContextMenuTx>()
+                        .inner()
+                        .clone(),
+                    token.clone(),
+                );
+                Ok(())
             });
         let _ = tx.send(res);
     })
