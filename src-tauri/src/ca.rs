@@ -38,6 +38,13 @@ mod windows_paths {
     /// Pre-TPM installs kept the key here in plaintext; its presence is
     /// also how we detect "this install needs migrating".
     pub const LEGACY_KEY_FILE: &str = "blueflame-ca.key";
+    /// Not secret: the legacy root's SHA-1 thumbprint, captured once, the
+    /// first time a migration is detected, from whatever `CERT_FILE` holds
+    /// at that moment. Every later retry reads the thumbprint back from
+    /// here instead of re-deriving it from `CERT_FILE`, which a partially
+    /// completed earlier attempt may already have overwritten with the new
+    /// CNG-backed cert. Removed once migration finishes.
+    pub const LEGACY_THUMBPRINT_FILE: &str = "blueflame-ca.legacy-thumbprint";
     /// Not secret: records which public key the current cert was issued
     /// for, so a restart can tell whether the CNG key backing it is still
     /// the same one without re-parsing the cert.
@@ -145,9 +152,40 @@ fn load_or_create_with<P: AsRef<Path>>(
 
     let cert_path = dir.join(CERT_FILE);
     let legacy_key_path = dir.join(LEGACY_KEY_FILE);
+    let legacy_thumbprint_path = dir.join(LEGACY_THUMBPRINT_FILE);
     let fingerprint_path = dir.join(PUBKEY_FINGERPRINT_FILE);
     let backend_path = dir.join(BACKEND_FILE);
     let migrating = legacy_key_path.exists();
+
+    // Capture the legacy root's thumbprint before anything below can
+    // overwrite `cert_path` with the new CNG-backed cert, and only the
+    // first time: a retry after an earlier, partially completed attempt
+    // must reuse the recorded value rather than re-reading `cert_path`,
+    // which that earlier attempt may already have overwritten with the
+    // new cert (see `migrate_from_legacy_install` for why that matters).
+    if migrating && !legacy_thumbprint_path.exists() {
+        match std::fs::read_to_string(&cert_path) {
+            Ok(legacy_pem) => match crate::ca_trust::cert_thumbprint_sha1(&legacy_pem) {
+                Ok(thumb) => {
+                    if let Err(e) = std::fs::write(&legacy_thumbprint_path, &thumb) {
+                        tracing::warn!(
+                            "blueflame: could not record the legacy CA root's thumbprint, \
+                             migration will not proceed until it can: {e}"
+                        );
+                    }
+                }
+                Err(e) => tracing::warn!(
+                    "blueflame: could not compute the legacy CA root's thumbprint, migration \
+                     will not proceed until it can: {e}"
+                ),
+            },
+            Err(e) => tracing::warn!(
+                "blueflame: legacy key file is present but its cert is not, so there is \
+                 nothing safe to remove from the trust store; migration will not proceed \
+                 until it can: {e}"
+            ),
+        }
+    }
 
     let key = ca_tpm::load_or_create_root_key(store, cng_key_name)
         .context("loading or creating the CNG-backed CA key")?;
@@ -166,15 +204,6 @@ fn load_or_create_with<P: AsRef<Path>>(
     let cert_is_stale =
         !cert_path.exists() || existing_fingerprint.as_deref() != Some(fingerprint.as_str());
 
-    // Read the outgoing cert (if any) before we potentially overwrite it,
-    // so a legacy-key migration can remove exactly that cert (by
-    // thumbprint) from the trust store below.
-    let old_cert_pem = if migrating || cert_is_stale {
-        std::fs::read_to_string(&cert_path).ok()
-    } else {
-        None
-    };
-
     let cert_pem = if cert_is_stale {
         let pem = generate_cert_pem(&key)?;
         std::fs::write(&cert_path, &pem).context("writing CA cert")?;
@@ -185,7 +214,13 @@ fn load_or_create_with<P: AsRef<Path>>(
     };
 
     if migrating {
-        migrate_from_legacy_install(&cert_path, old_cert_pem.as_deref(), &legacy_key_path, trust);
+        migrate_from_legacy_install(
+            &cert_path,
+            &cert_pem,
+            &legacy_thumbprint_path,
+            &legacy_key_path,
+            trust,
+        );
     }
 
     Ok(RootCa { cert_pem, key })
@@ -212,27 +247,51 @@ fn generate_cert_pem(key: &ca_tpm::TpmSigningKey) -> anyhow::Result<String> {
 /// Migrating off a pre-TPM install that kept the key in a plaintext file:
 /// trust the new root the same way the normal first-run flow would, remove
 /// the old root from the trust store by thumbprint (never by common name,
-/// so we can't touch some *other* cert that happens to share it), and
+/// so we can't touch some *other* cert that happens to share it, and never
+/// by re-deriving it from `cert_path`, which may already hold the new cert
+/// by the time this runs - see `legacy_thumbprint_path` in the caller), and
 /// securely delete the old key file.
 ///
-/// The three steps are ordered on purpose and are not independent: if
-/// installing the new root fails, we deliberately leave the old root
-/// trusted and the legacy key file in place, rather than removing the
-/// old root or the old key anyway. Doing the removal/deletion
+/// Every step here is idempotent and checks the trust store's actual state
+/// rather than assuming what an earlier attempt did or didn't finish, so
+/// this can be called any number of times, in any partially-completed
+/// starting state (a crash or a failure can interrupt it after any step),
+/// and always converges to: exactly one trusted BlueFlame root, matching
+/// the CNG key actually in use, with the legacy key file gone only once
+/// that is true.
+///
+/// If installing or verifying the new root fails, we deliberately leave
+/// the old root trusted and the legacy key file in place, rather than
+/// removing the old root or the old key anyway. Doing the removal/deletion
 /// unconditionally would leave a machine trusting neither CA on that
 /// failure, breaking every HTTPS site the proxy intercepts until someone
-/// notices and re-runs the trust flow by hand. Leaving the legacy key
-/// file behind also means `migrating` is still true on the next launch,
-/// so this whole migration is retried automatically.
+/// notices and re-runs the trust flow by hand. Leaving the legacy key file
+/// behind also means `migrating` is still true on the next launch, so this
+/// whole migration is retried automatically.
 #[cfg(target_os = "windows")]
 fn migrate_from_legacy_install(
     cert_path: &Path,
-    old_cert_pem: Option<&str>,
+    cert_pem: &str,
+    legacy_thumbprint_path: &Path,
     legacy_key_path: &Path,
     trust: &dyn crate::ca_trust::TrustOps,
 ) {
     tracing::info!("blueflame: migrating the CA root off a plaintext key file to CNG");
 
+    let legacy_thumbprint = match std::fs::read_to_string(legacy_thumbprint_path) {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::error!(
+                "blueflame: no recorded legacy CA root thumbprint yet, leaving the legacy key \
+                 file in place; migration will retry on next launch: {e}"
+            );
+            return;
+        }
+    };
+    let legacy_thumbprint = legacy_thumbprint.trim();
+
+    // Installing an already-installed cert is a harmless no-op, so this is
+    // always safe to (re)run rather than only on the very first attempt.
     if let Err(e) = trust.install(cert_path) {
         tracing::error!(
             "blueflame: could not auto-trust the migrated CA root, leaving the old root \
@@ -242,24 +301,50 @@ fn migrate_from_legacy_install(
         return;
     }
 
-    if let Some(old_pem) = old_cert_pem {
-        match thumbprint_sha1(old_pem) {
-            Ok(thumb) => {
-                if let Err(e) = trust.remove_by_thumbprint(&thumb) {
-                    tracing::warn!(
-                        "blueflame: could not remove the old CA root ({thumb}) from the trust store: {e}"
-                    );
-                }
-            }
-            Err(e) => {
-                tracing::warn!("blueflame: could not compute the old CA root's thumbprint: {e}")
-            }
+    let new_thumbprint = match crate::ca_trust::cert_thumbprint_sha1(cert_pem) {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::error!(
+                "blueflame: could not compute the new CA root's thumbprint after installing \
+                 it, leaving the old root and legacy key file in place; migration will retry \
+                 on next launch: {e}"
+            );
+            return;
+        }
+    };
+    if !trust.is_trusted(&new_thumbprint) {
+        tracing::error!(
+            "blueflame: the new CA root does not show up as trusted right after installing \
+             it, leaving the old root and legacy key file in place; migration will retry on \
+             next launch"
+        );
+        return;
+    }
+
+    // Only remove the old root if it is still there: an earlier attempt
+    // may have already removed it and then been interrupted before it
+    // could delete the legacy key file, and a real trust store errors out
+    // on removing a thumbprint that is not present.
+    if trust.is_trusted(legacy_thumbprint) {
+        if let Err(e) = trust.remove_by_thumbprint(legacy_thumbprint) {
+            tracing::warn!(
+                "blueflame: could not remove the old CA root ({legacy_thumbprint}) from the \
+                 trust store, leaving the legacy key file in place so migration retries the \
+                 removal on next launch: {e}"
+            );
+            return;
         }
     }
 
     if let Err(e) = secure_delete(legacy_key_path) {
         tracing::warn!("blueflame: could not securely delete the legacy CA key file: {e}");
+        return;
     }
+    // Best-effort: leaving this behind after a successful migration would
+    // not cause any wrong-cert removal (the legacy key file, the actual
+    // trigger for migrating, is already gone by this point), only a
+    // harmless leftover file.
+    let _ = std::fs::remove_file(legacy_thumbprint_path);
 }
 
 /// Best-effort secure delete: overwrite with zeros before unlinking. This
@@ -277,13 +362,6 @@ fn secure_delete(path: &Path) -> anyhow::Result<()> {
     std::fs::write(path, vec![0u8; len as usize]).context("zeroing legacy key file")?;
     std::fs::remove_file(path).context("removing legacy key file")?;
     Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn thumbprint_sha1(cert_pem: &str) -> anyhow::Result<String> {
-    let parsed = pem::parse(cert_pem).context("parsing PEM")?;
-    let digest = ring::digest::digest(&ring::digest::SHA1_FOR_LEGACY_USE_ONLY, parsed.contents());
-    Ok(digest.as_ref().iter().map(|b| format!("{b:02x}")).collect())
 }
 
 #[cfg(target_os = "windows")]
@@ -345,10 +423,59 @@ mod windows_tests {
     use std::sync::Arc;
 
     use crate::ca_trust::testing::FakeTrust;
+    use crate::ca_trust::TrustOps;
     use rcgen::KeyPair;
 
     fn fake_store() -> Arc<dyn KeyStore> {
         Arc::new(ca_tpm::testing::FakeKeyStore::new())
+    }
+
+    /// Simulate a pre-TPM install: a self-signed cert + plaintext key file
+    /// on disk, the state `migrate_from_legacy_install` needs to run.
+    /// Returns the legacy cert's PEM.
+    fn write_legacy_fixture(dir: &Path) -> String {
+        std::fs::create_dir_all(dir).unwrap();
+        let legacy_key = KeyPair::generate().expect("legacy key");
+        let mut params = CertificateParams::default();
+        params.distinguished_name = DistinguishedName::new();
+        params
+            .distinguished_name
+            .push(DnType::CommonName, CA_COMMON_NAME);
+        params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        let legacy_cert = params.self_signed(&legacy_key).expect("self sign legacy");
+
+        std::fs::write(dir.join(CERT_FILE), legacy_cert.pem()).unwrap();
+        std::fs::write(
+            dir.join(windows_paths::LEGACY_KEY_FILE),
+            legacy_key.serialize_pem(),
+        )
+        .unwrap();
+        legacy_cert.pem()
+    }
+
+    /// A fake trust store that already trusts the legacy root, as any real
+    /// machine mid-migration would (that is the whole reason a migration
+    /// runs at all).
+    fn trust_with_legacy_seeded(legacy_pem: &str) -> FakeTrust {
+        let legacy_thumb =
+            crate::ca_trust::cert_thumbprint_sha1(legacy_pem).expect("legacy thumbprint");
+        FakeTrust::seed_trusted(legacy_thumb)
+    }
+
+    /// Assert the fake trust store ends up trusting exactly one BlueFlame
+    /// root, and that it is the TPM-backed cert actually in use.
+    fn assert_only_new_root_trusted(trust: &FakeTrust, active_cert_pem: &str) {
+        let new_thumb = crate::ca_trust::cert_thumbprint_sha1(active_cert_pem).expect("thumbprint");
+        let trusted = trust.trusted.lock().unwrap();
+        assert_eq!(
+            trusted.len(),
+            1,
+            "expected exactly one trusted BlueFlame root, found {trusted:?}"
+        );
+        assert!(
+            trusted.contains(&new_thumb),
+            "the one trusted root should be the TPM-backed one actually in use"
+        );
     }
 
     #[test]
@@ -399,103 +526,238 @@ mod windows_tests {
     fn migrates_legacy_key_file_and_deletes_it() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let dir = tmp.path();
-        std::fs::create_dir_all(dir).unwrap();
-
-        // Simulate a pre-TPM install: a self-signed cert + plaintext key.
-        let legacy_key = KeyPair::generate().expect("legacy key");
-        let mut params = CertificateParams::default();
-        params.distinguished_name = DistinguishedName::new();
-        params
-            .distinguished_name
-            .push(DnType::CommonName, CA_COMMON_NAME);
-        params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
-        let legacy_cert = params.self_signed(&legacy_key).expect("self sign legacy");
-
-        std::fs::write(dir.join(CERT_FILE), legacy_cert.pem()).unwrap();
-        std::fs::write(
-            dir.join(windows_paths::LEGACY_KEY_FILE),
-            legacy_key.serialize_pem(),
-        )
-        .unwrap();
+        let legacy_pem = write_legacy_fixture(dir);
 
         let store = fake_store();
         // A fake trust store: this test never runs `certutil` or touches
         // whatever real trust store this machine has.
-        let trust = FakeTrust::default();
+        let trust = trust_with_legacy_seeded(&legacy_pem);
         let ca =
             load_or_create_with(dir, store, "blueflame-test-ca-migrate", &trust).expect("migrate");
 
         assert_ne!(
-            ca.cert_pem,
-            legacy_cert.pem(),
+            ca.cert_pem, legacy_pem,
             "migration should mint a brand new cert, not reuse the legacy one"
         );
         assert!(
             !dir.join(windows_paths::LEGACY_KEY_FILE).exists(),
             "legacy key file should be deleted after migration"
         );
+        assert!(
+            !dir.join(windows_paths::LEGACY_THUMBPRINT_FILE).exists(),
+            "the legacy thumbprint marker should be cleaned up once migration finishes"
+        );
 
-        let installed = trust.installed.lock().unwrap();
         assert_eq!(
-            installed.len(),
+            trust.install_calls.lock().unwrap().len(),
             1,
             "should auto-trust the new root exactly once"
         );
-        assert_eq!(installed[0], dir.join(CERT_FILE));
-
-        let removed = trust.removed.lock().unwrap();
         assert_eq!(
-            removed.len(),
+            trust.removed.lock().unwrap().len(),
             1,
             "should remove exactly the old root by thumbprint"
         );
+        assert_only_new_root_trusted(&trust, &ca.cert_pem);
     }
 
     #[test]
-    fn keeps_old_root_and_legacy_key_when_installing_the_new_root_fails() {
+    fn install_fails_then_retry_succeeds() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let dir = tmp.path();
-        std::fs::create_dir_all(dir).unwrap();
-
-        // Same pre-TPM install fixture as the happy-path test above.
-        let legacy_key = KeyPair::generate().expect("legacy key");
-        let mut params = CertificateParams::default();
-        params.distinguished_name = DistinguishedName::new();
-        params
-            .distinguished_name
-            .push(DnType::CommonName, CA_COMMON_NAME);
-        params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
-        let legacy_cert = params.self_signed(&legacy_key).expect("self sign legacy");
-
-        std::fs::write(dir.join(CERT_FILE), legacy_cert.pem()).unwrap();
-        std::fs::write(
-            dir.join(windows_paths::LEGACY_KEY_FILE),
-            legacy_key.serialize_pem(),
-        )
-        .unwrap();
+        let legacy_pem = write_legacy_fixture(dir);
 
         let store = fake_store();
-        let trust = FakeTrust {
-            fail_install: true,
-            ..Default::default()
-        };
-        load_or_create_with(dir, store, "blueflame-test-ca-migrate-fail", &trust)
-            .expect("load_or_create_with should not fail just because auto-trust failed");
+        let trust = trust_with_legacy_seeded(&legacy_pem);
+        trust.set_fail_install(true);
+
+        let first = load_or_create_with(
+            dir,
+            Arc::clone(&store),
+            "blueflame-test-ca-retry-install",
+            &trust,
+        )
+        .expect("load_or_create_with should not fail just because auto-trust failed");
 
         assert!(
             dir.join(windows_paths::LEGACY_KEY_FILE).exists(),
             "legacy key file must survive a failed install so migration retries next launch"
         );
+        let legacy_thumb =
+            crate::ca_trust::cert_thumbprint_sha1(&legacy_pem).expect("legacy thumbprint");
+        assert!(
+            trust.is_trusted(&legacy_thumb),
+            "only the untouched legacy root should be trusted while install keeps failing"
+        );
+        assert_eq!(trust.trusted.lock().unwrap().len(), 1);
+
+        // Retry: the install succeeds this time, as if a transient failure
+        // (or a crash right after it) had cleared up.
+        trust.set_fail_install(false);
+        let second = load_or_create_with(dir, store, "blueflame-test-ca-retry-install", &trust)
+            .expect("retry should succeed");
+
         assert_eq!(
-            std::fs::read_to_string(dir.join(windows_paths::LEGACY_KEY_FILE)).unwrap(),
-            legacy_key.serialize_pem(),
-            "legacy key file must not be zeroed or touched when install fails"
+            first.cert_pem, second.cert_pem,
+            "retry should reuse the already-generated cert, not mint another one"
+        );
+        assert!(!dir.join(windows_paths::LEGACY_KEY_FILE).exists());
+        assert!(!dir.join(windows_paths::LEGACY_THUMBPRINT_FILE).exists());
+        assert_only_new_root_trusted(&trust, &second.cert_pem);
+    }
+
+    #[test]
+    fn install_succeeds_but_removing_old_root_fails_then_retry() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        let legacy_pem = write_legacy_fixture(dir);
+
+        let store = fake_store();
+        let trust = trust_with_legacy_seeded(&legacy_pem);
+        trust.set_fail_remove(true);
+
+        let first = load_or_create_with(
+            dir,
+            Arc::clone(&store),
+            "blueflame-test-ca-retry-remove",
+            &trust,
+        )
+        .expect("load_or_create_with should not fail just because removing the old root failed");
+
+        assert!(
+            dir.join(windows_paths::LEGACY_KEY_FILE).exists(),
+            "legacy key file must survive a failed removal so migration retries next launch"
+        );
+        assert_eq!(
+            trust.trusted.lock().unwrap().len(),
+            2,
+            "both the new and the still-untouched old root should be trusted while removal keeps failing"
+        );
+
+        trust.set_fail_remove(false);
+        let second = load_or_create_with(dir, store, "blueflame-test-ca-retry-remove", &trust)
+            .expect("retry should succeed");
+
+        assert_eq!(first.cert_pem, second.cert_pem);
+        assert!(!dir.join(windows_paths::LEGACY_KEY_FILE).exists());
+        assert!(!dir.join(windows_paths::LEGACY_THUMBPRINT_FILE).exists());
+        assert_only_new_root_trusted(&trust, &second.cert_pem);
+    }
+
+    #[test]
+    fn crash_after_install_before_verifying_trust_then_retry() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        let legacy_pem = write_legacy_fixture(dir);
+
+        let store = fake_store();
+        let trust = trust_with_legacy_seeded(&legacy_pem);
+        trust.set_fail_is_trusted(true);
+
+        load_or_create_with(
+            dir,
+            Arc::clone(&store),
+            "blueflame-test-ca-retry-verify",
+            &trust,
+        )
+        .expect("load_or_create_with should not fail just because verifying trust failed");
+
+        assert!(
+            dir.join(windows_paths::LEGACY_KEY_FILE).exists(),
+            "legacy key file must survive a failed trust verification so migration retries \
+             next launch"
         );
         assert!(
             trust.removed.lock().unwrap().is_empty(),
-            "the old root must not be removed from the trust store when installing the new root failed, \
-             or the machine would end up trusting neither CA"
+            "the old root must not be removed before the new one is confirmed trusted"
         );
+
+        trust.set_fail_is_trusted(false);
+        let ca = load_or_create_with(dir, store, "blueflame-test-ca-retry-verify", &trust)
+            .expect("retry should succeed");
+
+        assert!(!dir.join(windows_paths::LEGACY_KEY_FILE).exists());
+        assert!(!dir.join(windows_paths::LEGACY_THUMBPRINT_FILE).exists());
+        assert_only_new_root_trusted(&trust, &ca.cert_pem);
+    }
+
+    #[test]
+    fn crash_after_capturing_legacy_thumbprint_then_retry() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        let legacy_pem = write_legacy_fixture(dir);
+
+        // Simulate a crash right after the legacy thumbprint was recorded,
+        // but before anything else in the migration ran.
+        let legacy_thumb =
+            crate::ca_trust::cert_thumbprint_sha1(&legacy_pem).expect("legacy thumbprint");
+        std::fs::write(
+            dir.join(windows_paths::LEGACY_THUMBPRINT_FILE),
+            &legacy_thumb,
+        )
+        .unwrap();
+
+        let store = fake_store();
+        let trust = trust_with_legacy_seeded(&legacy_pem);
+        let ca = load_or_create_with(dir, store, "blueflame-test-ca-crash-thumb", &trust)
+            .expect("migrate after resuming from a recorded thumbprint");
+
+        assert_ne!(ca.cert_pem, legacy_pem);
+        assert!(!dir.join(windows_paths::LEGACY_KEY_FILE).exists());
+        assert!(!dir.join(windows_paths::LEGACY_THUMBPRINT_FILE).exists());
+        assert_only_new_root_trusted(&trust, &ca.cert_pem);
+    }
+
+    #[test]
+    fn crash_after_removing_old_root_before_deleting_legacy_key_then_retry() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        let legacy_pem = write_legacy_fixture(dir);
+        let legacy_thumb =
+            crate::ca_trust::cert_thumbprint_sha1(&legacy_pem).expect("legacy thumbprint");
+
+        // Get to the state a real run would be in right before it crashed:
+        // the new CNG-backed cert already generated and installed, the old
+        // root already removed, only the legacy key file (and its
+        // thumbprint marker) still waiting to be deleted.
+        let store = fake_store();
+        let key =
+            ca_tpm::load_or_create_root_key(Arc::clone(&store), "blueflame-test-ca-crash-remove")
+                .expect("create cng key");
+        let new_cert_pem = generate_cert_pem(&key).expect("generate new cert");
+        std::fs::write(dir.join(CERT_FILE), &new_cert_pem).unwrap();
+        std::fs::write(
+            dir.join(windows_paths::PUBKEY_FINGERPRINT_FILE),
+            hex_encode(&key.public_point()),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join(windows_paths::LEGACY_THUMBPRINT_FILE),
+            &legacy_thumb,
+        )
+        .unwrap();
+
+        let new_thumb = crate::ca_trust::cert_thumbprint_sha1(&new_cert_pem).expect("new thumb");
+        let trust = FakeTrust::default();
+        trust.trusted.lock().unwrap().insert(new_thumb);
+
+        let ca = load_or_create_with(dir, store, "blueflame-test-ca-crash-remove", &trust)
+            .expect("retry should finish cleanup");
+
+        assert_eq!(
+            ca.cert_pem, new_cert_pem,
+            "retry should reuse the already-installed cert, not mint another one"
+        );
+        assert!(
+            !dir.join(windows_paths::LEGACY_KEY_FILE).exists(),
+            "legacy key file should finally be deleted"
+        );
+        assert!(!dir.join(windows_paths::LEGACY_THUMBPRINT_FILE).exists());
+        assert!(
+            trust.removed.lock().unwrap().is_empty(),
+            "the old root was already gone before this call, so remove should not be called again"
+        );
+        assert_only_new_root_trusted(&trust, &ca.cert_pem);
     }
 
     #[test]

@@ -8,11 +8,21 @@
 
 use std::path::{Path, PathBuf};
 
-/// Whether the BlueFlame root CA is currently trusted by the user's OS.
+/// Whether the BlueFlame root CA at `cert_path` is currently trusted by the
+/// user's OS. Matched by SHA-1 thumbprint, never by common name: during a
+/// TPM-key migration the legacy and new CNG-backed roots share the same
+/// common name, so a common-name match cannot tell which of the two is
+/// actually the one trusted.
 pub fn is_trusted(cert_path: &Path) -> bool {
     #[cfg(target_os = "windows")]
     {
-        windows::is_trusted(cert_path)
+        let Ok(pem) = std::fs::read_to_string(cert_path) else {
+            return false;
+        };
+        let Ok(thumbprint) = cert_thumbprint_sha1(&pem) else {
+            return false;
+        };
+        windows::is_trusted_by_thumbprint(&thumbprint)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -22,6 +32,19 @@ pub fn is_trusted(cert_path: &Path) -> bool {
         let _ = cert_path;
         false
     }
+}
+
+/// SHA-1 thumbprint of a PEM-encoded cert, matching what Windows' cert
+/// store and `certutil` use to identify a specific cert. Shared by the
+/// trust-status check above and by `ca.rs`'s legacy-root migration, so
+/// there is exactly one place that computes a "thumbprint" and every
+/// caller means the same thing by it.
+#[cfg(target_os = "windows")]
+pub fn cert_thumbprint_sha1(cert_pem: &str) -> anyhow::Result<String> {
+    use anyhow::Context;
+    let parsed = pem::parse(cert_pem).context("parsing PEM")?;
+    let digest = ring::digest::digest(&ring::digest::SHA1_FOR_LEGACY_USE_ONLY, parsed.contents());
+    Ok(digest.as_ref().iter().map(|b| format!("{b:02x}")).collect())
 }
 
 /// Try to install the CA into the user's trust store. Returns ok on success.
@@ -75,6 +98,12 @@ pub fn remove_by_thumbprint(thumbprint: &str) -> anyhow::Result<()> {
 pub trait TrustOps: Send + Sync {
     fn install(&self, cert_path: &Path) -> anyhow::Result<()>;
     fn remove_by_thumbprint(&self, thumbprint: &str) -> anyhow::Result<()>;
+    /// Whether a cert with this thumbprint is currently trusted. Used to
+    /// confirm a newly installed root actually took, and to check whether
+    /// an old root still needs removing (rather than assuming it does),
+    /// so a migration retry never repeats work an earlier, interrupted
+    /// attempt already finished.
+    fn is_trusted(&self, thumbprint: &str) -> bool;
 }
 
 /// The real, `certutil`-backed implementation used in production.
@@ -90,39 +119,103 @@ impl TrustOps for RealTrust {
     fn remove_by_thumbprint(&self, thumbprint: &str) -> anyhow::Result<()> {
         remove_by_thumbprint(thumbprint)
     }
+
+    fn is_trusted(&self, thumbprint: &str) -> bool {
+        windows::is_trusted_by_thumbprint(thumbprint)
+    }
 }
 
 #[cfg(target_os = "windows")]
 #[cfg(test)]
 pub mod testing {
-    use super::TrustOps;
+    use super::{cert_thumbprint_sha1, TrustOps};
+    use std::collections::HashSet;
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
 
-    /// Records what would have been installed/removed instead of ever
-    /// touching a real trust store.
+    /// An in-memory stand-in for the OS trust store: a set of thumbprints
+    /// it currently "trusts", plus optional one-call-at-a-time failure
+    /// injection so a test can simulate a step failing (or the process
+    /// crashing right after that step) and then retrying. Never touches a
+    /// real trust store, so tests never see a Windows confirmation dialog
+    /// and never depend on whatever certs happen to be on the test machine.
     #[derive(Default)]
     pub struct FakeTrust {
-        pub installed: Mutex<Vec<PathBuf>>,
+        /// Thumbprints this fake store currently trusts. Seed it in a test
+        /// to simulate "this cert was already trusted before the test
+        /// started" (e.g. the legacy root).
+        pub trusted: Mutex<HashSet<String>>,
+        pub install_calls: Mutex<Vec<PathBuf>>,
         pub removed: Mutex<Vec<String>>,
-        /// When set, `install` fails without recording anything, so tests
-        /// can exercise what happens when trusting the new root does not
-        /// go through (see the migration-ordering test in ca.rs).
-        pub fail_install: bool,
+        /// When true, `install` fails without changing `trusted`. Flip it
+        /// back to false between two calls in the same test to simulate a
+        /// failed (or interrupted) attempt followed by a successful retry.
+        pub fail_install: Mutex<bool>,
+        /// When true, `is_trusted` reports `false` for every thumbprint
+        /// regardless of `trusted`, simulating the post-install
+        /// verification step failing (or the process being killed before
+        /// it could run).
+        pub fail_is_trusted: Mutex<bool>,
+        /// When true, `remove_by_thumbprint` fails without changing
+        /// `trusted`.
+        pub fail_remove: Mutex<bool>,
+    }
+
+    impl FakeTrust {
+        /// Pre-populate the fake store as already trusting `thumbprint`,
+        /// e.g. the legacy root that was installed before this test began.
+        pub fn seed_trusted(thumbprint: impl Into<String>) -> Self {
+            let trust = Self::default();
+            trust.trusted.lock().unwrap().insert(thumbprint.into());
+            trust
+        }
+
+        pub fn set_fail_install(&self, fail: bool) {
+            *self.fail_install.lock().unwrap() = fail;
+        }
+
+        pub fn set_fail_is_trusted(&self, fail: bool) {
+            *self.fail_is_trusted.lock().unwrap() = fail;
+        }
+
+        pub fn set_fail_remove(&self, fail: bool) {
+            *self.fail_remove.lock().unwrap() = fail;
+        }
     }
 
     impl TrustOps for FakeTrust {
         fn install(&self, cert_path: &Path) -> anyhow::Result<()> {
-            if self.fail_install {
+            if *self.fail_install.lock().unwrap() {
                 anyhow::bail!("simulated trust-store install failure");
             }
-            self.installed.lock().unwrap().push(cert_path.to_path_buf());
+            let pem = std::fs::read_to_string(cert_path)?;
+            let thumbprint = cert_thumbprint_sha1(&pem)?;
+            self.trusted.lock().unwrap().insert(thumbprint);
+            self.install_calls
+                .lock()
+                .unwrap()
+                .push(cert_path.to_path_buf());
             Ok(())
         }
 
         fn remove_by_thumbprint(&self, thumbprint: &str) -> anyhow::Result<()> {
+            if *self.fail_remove.lock().unwrap() {
+                anyhow::bail!("simulated trust-store remove failure");
+            }
+            // Real `certutil -delstore` fails when the thumbprint is not
+            // present, so match that here rather than silently succeeding.
+            if !self.trusted.lock().unwrap().remove(thumbprint) {
+                anyhow::bail!("no cert with thumbprint {thumbprint} in the fake trust store");
+            }
             self.removed.lock().unwrap().push(thumbprint.to_string());
             Ok(())
+        }
+
+        fn is_trusted(&self, thumbprint: &str) -> bool {
+            if *self.fail_is_trusted.lock().unwrap() {
+                return false;
+            }
+            self.trusted.lock().unwrap().contains(thumbprint)
         }
     }
 }
@@ -167,12 +260,12 @@ pub fn reveal(cert_path: &Path) -> anyhow::Result<PathBuf> {
 mod windows {
     use super::*;
 
-    const CA_COMMON_NAME: &str = "BlueFlame Root CA";
-
-    pub fn is_trusted(_cert_path: &Path) -> bool {
-        // `certutil -verifystore -user Root <CN>` exits 0 when the cert is present.
+    /// Whether a cert with this SHA-1 thumbprint is in the user's Root
+    /// store. `certutil -verifystore` accepts a thumbprint as the cert
+    /// identifier, not just a common name, and exits 0 when found.
+    pub fn is_trusted_by_thumbprint(thumbprint: &str) -> bool {
         match std::process::Command::new("certutil")
-            .args(["-verifystore", "-user", "Root", CA_COMMON_NAME])
+            .args(["-verifystore", "-user", "Root", thumbprint])
             .output()
         {
             Ok(out) => out.status.success(),
@@ -226,5 +319,66 @@ mod windows {
                 stdout
             }
         )
+    }
+}
+
+#[cfg(target_os = "windows")]
+#[cfg(test)]
+mod tests {
+    use super::testing::FakeTrust;
+    use super::{cert_thumbprint_sha1, TrustOps};
+
+    /// A self-signed cert with the given common name, so tests can build
+    /// two certs that share a name but not a key (and so not a thumbprint).
+    fn self_signed_cert_pem(common_name: &str) -> String {
+        use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
+
+        let key = KeyPair::generate().expect("generate key");
+        let mut params = CertificateParams::default();
+        params.distinguished_name = DistinguishedName::new();
+        params
+            .distinguished_name
+            .push(DnType::CommonName, common_name);
+        params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        params.self_signed(&key).expect("self sign").pem()
+    }
+
+    #[test]
+    fn same_common_name_certs_have_different_thumbprints() {
+        let cert_a = self_signed_cert_pem("BlueFlame Root CA");
+        let cert_b = self_signed_cert_pem("BlueFlame Root CA");
+
+        let thumb_a = cert_thumbprint_sha1(&cert_a).expect("thumbprint a");
+        let thumb_b = cert_thumbprint_sha1(&cert_b).expect("thumbprint b");
+
+        assert_ne!(
+            thumb_a, thumb_b,
+            "two different certs must not collide on thumbprint just because they share a CN"
+        );
+    }
+
+    #[test]
+    fn is_trusted_matches_by_thumbprint_not_common_name() {
+        // Two certs sharing the BlueFlame CA's common name, as the legacy
+        // and CNG-backed roots do during migration - a CN-based check could
+        // not tell them apart, a thumbprint-based one must.
+        let legacy_cert = self_signed_cert_pem("BlueFlame Root CA");
+        let new_cert = self_signed_cert_pem("BlueFlame Root CA");
+
+        let legacy_thumb = cert_thumbprint_sha1(&legacy_cert).expect("legacy thumbprint");
+        let new_thumb = cert_thumbprint_sha1(&new_cert).expect("new thumbprint");
+        assert_ne!(legacy_thumb, new_thumb);
+
+        // Only the legacy cert is trusted in this fake store.
+        let trust = FakeTrust::seed_trusted(legacy_thumb.clone());
+
+        assert!(
+            trust.is_trusted(&legacy_thumb),
+            "the cert actually in the store should be reported trusted"
+        );
+        assert!(
+            !trust.is_trusted(&new_thumb),
+            "a different cert with the same common name must not be reported trusted"
+        );
     }
 }
