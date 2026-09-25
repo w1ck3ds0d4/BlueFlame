@@ -121,7 +121,7 @@ Enrollment happens once, when Daniel first turns the locker on.
    (`wrapped_totp_secret`) and the plaintext secret is dropped from memory; the QR code and text
    are shown exactly once and are not retrievable again except by re-enrolling.
 6. BlueFlame generates the recovery phrase (about 12 words) and shows it once, per the existing
-   "Recovery code" section below, and wraps the data key a second time under a key derived from
+   "Recovery phrase" section below, and wraps the data key a second time under a key derived from
    it, giving `wrapped_data_key_recovery`.
 
 ## How unlock works
