@@ -939,6 +939,12 @@ pub fn browser_switch_tab(
     tabs: tauri::State<'_, Tabs>,
     id: u64,
 ) -> Result<TabsView, String> {
+    // Measure BEFORE taking the tabs lock. `active_tab_bounds` reads the
+    // window size, which waits for the UI thread; the UI thread can be
+    // waiting for this same lock (any sync tab command), so measuring
+    // under the lock froze the app when this ran off the UI thread
+    // (session restore at boot, rebuilding the tabs after the mobile toggle).
+    let (active_pos, active_size) = active_tab_bounds(&app);
     let mut s = tabs.lock().map_err(|e| format!("lock tabs: {e}"))?;
     if !s.tabs.iter().any(|t| t.id == id) {
         return Err(format!("unknown tab id {id}"));
@@ -947,7 +953,6 @@ pub fn browser_switch_tab(
     // New active tab gets the mobile/desktop-aware bounds; everyone
     // else shrinks to 0x0 so inactive tabs don't paint over the
     // visible one.
-    let (active_pos, active_size) = active_tab_bounds(&app);
     for t in &s.tabs {
         if let Some(wv) = app.get_webview(&tab_label(t.id)) {
             if t.id == id {
@@ -1051,6 +1056,8 @@ pub fn browser_close_tab(
         let _ = wv.close();
     }
 
+    // Measured before locking, see `browser_switch_tab`.
+    let (pos, size) = active_tab_bounds(&app);
     let mut s = tabs.lock().map_err(|e| format!("lock tabs: {e}"))?;
     s.tabs.retain(|t| t.id != id);
 
@@ -1061,7 +1068,6 @@ pub fn browser_close_tab(
         s.active_id = s.tabs.last().map(|t| t.id);
         if let Some(new_active) = s.active_id {
             if let Some(wv) = app.get_webview(&tab_label(new_active)) {
-                let (pos, size) = active_tab_bounds(&app);
                 let _ = wv.set_position(pos);
                 let _ = wv.set_size(size);
             }
@@ -1251,10 +1257,11 @@ pub fn browser_show_active(
     app: tauri::AppHandle,
     tabs: tauri::State<'_, Tabs>,
 ) -> Result<TabsView, String> {
+    // Measured before locking, see `browser_switch_tab`.
+    let (pos, size) = active_tab_bounds(&app);
     let s = tabs.lock().map_err(|e| format!("lock tabs: {e}"))?;
     if let Some(id) = s.active_id {
         if let Some(wv) = app.get_webview(&tab_label(id)) {
-            let (pos, size) = active_tab_bounds(&app);
             let _ = wv.set_position(pos);
             let _ = wv.set_size(size);
         }
