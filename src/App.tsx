@@ -317,6 +317,13 @@ export default function App() {
     })
       .then((fn) => unlisteners.push(fn))
       .catch(() => undefined);
+    // From the context-menu popup (ContextMenu.tsx): a bookmark was
+    // added or removed there, so the bar and the star re-read.
+    listen('blueflame:bookmarks-changed', () => {
+      setBookmarksVersion((v) => v + 1);
+    })
+      .then((fn) => unlisteners.push(fn))
+      .catch(() => undefined);
     // From the tab-overflow menu popup (TabStrip.tsx): the same
     // onSelect / onClose the strip's own tab buttons call.
     listen<number>('blueflame:select-tab', (e) => {
@@ -333,6 +340,31 @@ export default function App() {
       for (const fn of unlisteners) fn();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The context menu is a separate webview, so a click in the chrome
+  // (tab strip, sidebar, URL bar) never reaches it. Close it on the next
+  // press here, the way a native menu closes when you click elsewhere.
+  useEffect(() => {
+    let menuShown = false;
+    let unlisten: UnlistenFn | undefined;
+    listen('blueflame:context-menu-shown', () => {
+      menuShown = true;
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => undefined);
+    const onPointerDown = () => {
+      if (!menuShown) return;
+      menuShown = false;
+      invoke('hide_context_menu').catch(() => undefined);
+    };
+    window.addEventListener('pointerdown', onPointerDown, true);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true);
+      unlisten?.();
+    };
   }, []);
 
   // Any full-screen React overlay (tab switcher, CA trust modal) needs

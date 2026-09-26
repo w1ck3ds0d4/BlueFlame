@@ -473,6 +473,7 @@ impl BlueFlameHandler {
                 // task in lib.rs adds the active-tab offset before
                 // opening the popup so anchor_x/y land in main-
                 // window coordinates.
+                bookmark: false,
                 screen_x: x,
                 screen_y: y,
             })
