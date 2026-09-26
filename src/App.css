@@ -395,42 +395,61 @@ button {
   border-bottom: 1px solid var(--border);
 }
 
+/* One dimension backs every square control in this row (nav icons, the
+   status chips, the star): centralised here instead of repeating the
+   literal in each rule below, so the two side clusters can derive an
+   outer width from it rather than each guessing one. */
 .url-bar-row {
+  --toolbar-control-size: 26px;
+  --toolbar-cluster-width: calc(4 * var(--toolbar-control-size) + 3 * var(--space-2));
   display: grid;
-  /* back, forward, reload, home, url-wrap, status-group, go. */
-  grid-template-columns: auto auto auto auto 1fr auto auto;
+  /* nav cluster, url-wrap, status cluster. Both clusters share
+     --toolbar-cluster-width so the field is exactly centered between
+     them at any row width. */
+  grid-template-columns: var(--toolbar-cluster-width) 1fr var(--toolbar-cluster-width);
   gap: 4px;
   align-items: center;
   padding: 6px 16px 8px;
   position: relative;
 }
 
-/* One calm group for the three site-status chips (blocks, trust score,
-   bookmark), read as a single unit at one height instead of three
-   disconnected boxes. Neutral by default; the status map below
-   (STATUS_TONE in UrlBar.tsx, .status-tone-* here) is the only place a
-   chip is allowed to pick up colour, and only for a real warning or
-   danger finding, never for a normal or positive result. */
-.status-group {
-  height: 26px;
-  display: inline-flex;
-  align-items: stretch;
+.nav-cluster-left,
+.nav-cluster-right {
+  height: var(--toolbar-control-size);
+  display: flex;
+  align-items: center;
   align-self: center;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-xs);
+  gap: var(--space-2);
+}
+
+.nav-cluster-left {
+  justify-content: flex-start;
+}
+
+/* The site-status cluster (tracker count, site trust) mirrors the nav
+   cluster it sits opposite: same control height, same outer width, and
+   the nav cluster's own border weight and square corners rather than
+   the softer pill treatment a lone status chip would otherwise get.
+   Neutral by default; the status map below (STATUS_TONE in UrlBar.tsx,
+   .status-tone-* here) is the only place a chip is allowed to pick up
+   colour, and only for a real warning or danger finding, never for a
+   normal or positive result. */
+.nav-cluster-right {
+  justify-content: flex-end;
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
   overflow: hidden;
 }
 
-.status-group > .block-counter,
-.status-group > .url-trust {
+.nav-cluster-right > .block-counter,
+.nav-cluster-right > .url-trust {
+  flex: 1;
   border: none;
-  border-right: 1px solid var(--border-default);
   border-radius: 0;
 }
 
-.status-group > .url-star {
-  border: none;
-  border-radius: 0;
+.nav-cluster-right > .block-counter {
+  border-right: 1px solid var(--border-strong);
 }
 
 .url-trust,
@@ -459,6 +478,23 @@ button {
 
 .url-star {
   min-width: 30px;
+}
+
+/* The star now lives inside the address field instead of the status
+   cluster: absolutely positioned over the field's right end so it adds
+   no height of its own (the field, not this button, still sets the
+   row's height), sized to the WCAG 2.2 2.5.8 minimum 24x24 CSS px
+   target even though its glyph is smaller. */
+.url-star-in-field {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  min-width: 0;
+  padding: 0;
+  border-radius: var(--radius-xs);
 }
 
 .url-trust:hover:not(:disabled),
@@ -720,6 +756,8 @@ button {
 
 .url-input-wrap .url-input {
   width: 100%;
+  /* Room for the star button docked at the field's right end. */
+  padding-right: calc(var(--space-2) + 24px + var(--space-2));
 }
 
 .nav-icon {
@@ -844,33 +882,6 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: right;
-}
-
-.nav-primary {
-  /* An action button: stays on the system's action colour, never the
-     flame accent, per the design system's rule that the flame marks
-     the brand while indigo marks every button, link and focus ring. */
-  height: 26px;
-  padding: 0 var(--space-6);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  align-self: center;
-  background: var(--action-primary);
-  color: var(--wk-on-brand);
-  border: 1px solid var(--action-primary);
-  border-radius: var(--radius-xs);
-  font-family: var(--mono);
-  font-weight: 700;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
-}
-
-.nav-primary:hover {
-  background: var(--action-primary-hover);
-  border-color: var(--action-primary-hover);
 }
 
 .url-error {
@@ -2199,7 +2210,9 @@ button {
 }
 
 .primary {
-  /* Action colour, not the flame accent; see .nav-primary above. */
+  /* Action colour, not the flame accent; every button, link and focus
+     ring keeps to the system's one action colour, per the flame's own
+     rule reserving the accent for the brand mark. */
   padding: var(--space-4) var(--space-8);
   background: var(--action-primary);
   color: var(--wk-on-brand);
