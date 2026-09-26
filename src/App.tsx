@@ -344,7 +344,8 @@ export default function App() {
 
   // The context menu is a separate webview, so a click in the chrome
   // (tab strip, sidebar, URL bar) never reaches it. Close it on the next
-  // press here, the way a native menu closes when you click elsewhere.
+  // press here, or on Escape, the way a native menu closes. A menu opened
+  // from a page closes through the tab script instead.
   useEffect(() => {
     let menuShown = false;
     let unlisten: UnlistenFn | undefined;
@@ -355,14 +356,19 @@ export default function App() {
         unlisten = fn;
       })
       .catch(() => undefined);
-    const onPointerDown = () => {
+    const closeMenu = () => {
       if (!menuShown) return;
       menuShown = false;
       invoke('hide_context_menu').catch(() => undefined);
     };
-    window.addEventListener('pointerdown', onPointerDown, true);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeMenu();
+    };
+    window.addEventListener('pointerdown', closeMenu, true);
+    window.addEventListener('keydown', onKeyDown, true);
     return () => {
-      window.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('pointerdown', closeMenu, true);
+      window.removeEventListener('keydown', onKeyDown, true);
       unlisten?.();
     };
   }, []);
