@@ -16,6 +16,18 @@
 //! host that the MITM proxy intercepted, but page CSP `connect-src`
 //! directives silently dropped the request before it left the
 //! webview. See `submit_tab_event` for the IPC entry point.
+//!
+//! Two rules keep the popup usable for the whole session:
+//! - Nothing closes it. Other popups and overlays park it offscreen
+//!   ([`hide_context_menu`]); if it is missing anyway,
+//!   [`open_context_menu`] recreates it and the new webview pulls the
+//!   pending click on mount ([`take_pending_context_menu`]).
+//! - It is raised above the tab webviews on every show. On Windows each
+//!   child webview is a sibling window and a new one is created on top,
+//!   so every tab opened after the popup would otherwise cover it.
+
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{LogicalPosition, LogicalSize, Manager, WebviewBuilder, WebviewUrl};
@@ -47,6 +59,9 @@ pub struct ContextMenuPayload {
     pub selection_text: Option<String>,
     pub screen_x: f64,
     pub screen_y: f64,
+    /// Opened from a bookmark chip in the chrome, not from a page: the
+    /// popup shows bookmark actions (open, remove) instead of page ones.
+    pub bookmark: bool,
 }
 
 /// One request from proxy → consumer task. The `KeyboardShortcut`
@@ -187,6 +202,7 @@ pub(crate) fn tab_event_to_request(event: TabEvent) -> Result<ContextMenuRequest
             selection_text: sel.filter(|s| !s.is_empty()),
             screen_x: x,
             screen_y: y,
+            bookmark: false,
         }),
         TabEvent::Dismiss => ContextMenuRequest::Dismiss,
         TabEvent::Kbd { key, shift } => {
@@ -245,13 +261,18 @@ pub fn submit_tab_event(
     Ok(())
 }
 
-/// Park the popup webview offscreen at minimum size. Used as the
-/// "hidden" state - cheaper than create/destroy on every right-click,
-/// and lets us keep the React bundle warm so subsequent RMBs feel
-/// instant. Some platforms ignore set_size(0,0), so 1x1 with a far-
-/// negative position is the safe portable hide.
+/// Park the popup webview offscreen. Used as the "hidden" state -
+/// cheaper than create/destroy on every right-click, and lets us keep
+/// the React bundle warm so subsequent RMBs feel instant. Some
+/// platforms ignore set_size(0,0), so a far-negative position is the
+/// safe portable hide.
+///
+/// The parked width is the menu's real width, not 1 px: the popup
+/// measures its content height while parked, and at 1 px wide every
+/// label wrapped, so the measured height came out several times too
+/// tall and the shown popup ran past its items as an empty dark block.
 const HIDDEN_POSITION: LogicalPosition<f64> = LogicalPosition::new(-9999.0, -9999.0);
-const HIDDEN_SIZE: LogicalSize<f64> = LogicalSize::new(1.0, 1.0);
+const HIDDEN_SIZE: LogicalSize<f64> = LogicalSize::new(POPUP_WIDTH, 1.0);
 
 /// Spawn the context-menu popup webview parked offscreen. Called once
 /// at app boot so right-click can later just reposition + resize a
@@ -293,6 +314,86 @@ pub async fn ensure_context_menu_popup(app: &tauri::AppHandle) -> Result<(), Str
     rx.await
         .map_err(|e| format!("main-thread add_child dropped: {e}"))??;
     Ok(())
+}
+
+/// How long a click waits for a freshly created popup to mount and pull
+/// it. Past this the click is stale and the menu is not shown.
+const PENDING_TTL: Duration = Duration::from_secs(3);
+
+/// The last click that has not been shown yet. Set on every open,
+/// cleared by [`show_context_menu`], and pulled by a popup webview that
+/// mounted after the click was emitted (so the event missed it).
+static PENDING: Mutex<Option<(ContextMenuPayload, Instant)>> = Mutex::new(None);
+
+fn set_pending(payload: ContextMenuPayload) {
+    if let Ok(mut g) = PENDING.lock() {
+        *g = Some((payload, Instant::now()));
+    }
+}
+
+fn clear_pending() {
+    if let Ok(mut g) = PENDING.lock() {
+        *g = None;
+    }
+}
+
+/// Take the pending click if it is younger than `ttl`. Always empties
+/// the slot, so one click can open at most one menu.
+fn take_if_fresh<T>(slot: &mut Option<(T, Instant)>, now: Instant, ttl: Duration) -> Option<T> {
+    match slot.take() {
+        Some((value, at)) if now.saturating_duration_since(at) <= ttl => Some(value),
+        _ => None,
+    }
+}
+
+/// Called by the popup's React side on mount. Returns the click that
+/// arrived while the popup was being created, if it is still fresh.
+#[tauri::command]
+pub fn take_pending_context_menu() -> Option<ContextMenuPayload> {
+    PENDING
+        .lock()
+        .ok()
+        .and_then(|mut g| take_if_fresh(&mut g, Instant::now(), PENDING_TTL))
+}
+
+/// Open the menu for one click. Recreates the popup webview if it is
+/// gone; the new webview misses the emitted event but pulls the same
+/// payload from [`take_pending_context_menu`] once it has mounted.
+pub async fn open_context_menu(
+    app: &tauri::AppHandle,
+    payload: ContextMenuPayload,
+) -> Result<(), String> {
+    set_pending(payload.clone());
+    if app.get_webview(CONTEXT_MENU_LABEL).is_none() {
+        tracing::info!("context menu popup missing, recreating it");
+        ensure_context_menu_popup(app).await?;
+    }
+    deliver_context_menu_payload(app, payload)
+}
+
+/// Right-click on a bookmark chip in the chrome's bookmark bar. The
+/// chrome webview fills the main window, so its client coordinates are
+/// already main-window coordinates (page events get the tab offset
+/// added in the consumer task instead).
+#[tauri::command]
+pub async fn open_bookmark_menu(
+    app: tauri::AppHandle,
+    url: String,
+    title: String,
+    x: f64,
+    y: f64,
+) -> Result<(), String> {
+    let payload = ContextMenuPayload {
+        page_url: String::new(),
+        link_url: Some(url),
+        link_text: Some(title).filter(|s| !s.is_empty()),
+        image_url: None,
+        selection_text: None,
+        screen_x: x,
+        screen_y: y,
+        bookmark: true,
+    };
+    open_context_menu(&app, payload).await
 }
 
 /// Send a fresh payload to the warm popup. The React side listens for
@@ -345,13 +446,61 @@ pub fn show_context_menu(app: tauri::AppHandle, x: f64, y: f64, height: f64) -> 
 
     let panel_w = POPUP_WIDTH.min((main_w - 2.0 * POPUP_MARGIN).max(140.0));
     let panel_h = height.clamp(40.0, (main_h - POPUP_MARGIN * 2.0).max(100.0));
-    let panel_x = x.min(main_w - panel_w - POPUP_MARGIN).max(POPUP_MARGIN);
-    let panel_y = y.min(main_h - panel_h - POPUP_MARGIN).max(POPUP_MARGIN);
+    let panel_x = place_on_axis(x, panel_w, main_w);
+    let panel_y = place_on_axis(y, panel_h, main_h);
 
+    clear_pending();
     let _ = wv.set_size(LogicalSize::new(panel_w, panel_h));
     let _ = wv.set_position(LogicalPosition::new(panel_x, panel_y));
+    raise_above_tabs(&wv);
+    // The chrome closes the menu on its next click (App.tsx); a click in
+    // a page closes it through the tab script's dismiss event.
+    let _ = tauri::Emitter::emit(&app, "blueflame:context-menu-shown", ());
     Ok(())
 }
+
+/// Where the menu starts along one axis, the way native menus do it:
+/// at the cursor when it fits, flipped to end at the cursor when it
+/// doesn't, and clamped inside the window only when neither fits.
+fn place_on_axis(cursor: f64, extent: f64, window: f64) -> f64 {
+    let max_start = (window - extent - POPUP_MARGIN).max(POPUP_MARGIN);
+    if cursor + extent <= window - POPUP_MARGIN {
+        cursor.max(POPUP_MARGIN)
+    } else if cursor - extent >= POPUP_MARGIN {
+        cursor - extent
+    } else {
+        cursor.min(max_start).max(POPUP_MARGIN)
+    }
+}
+
+/// Put the popup on top of its sibling webviews. wry creates each child
+/// webview inside its own container window at the top of the z-order
+/// and later moves it with `SWP_NOZORDER`, so without this the popup
+/// stays under every tab created after it and the page covers the menu.
+#[cfg(windows)]
+fn raise_above_tabs(wv: &tauri::Webview) {
+    let result = wv.with_webview(|platform| {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+        };
+        let mut container = HWND::default();
+        if unsafe { platform.controller().ParentWindow(&mut container) }.is_err() {
+            return;
+        }
+        let flags = SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE;
+        if let Err(e) = unsafe { SetWindowPos(container, Some(HWND_TOP), 0, 0, 0, 0, flags) } {
+            tracing::warn!(error = %e, "failed to raise the context menu popup");
+        }
+    });
+    if let Err(e) = result {
+        tracing::warn!(error = %e, "with_webview dispatch failed for the context menu popup");
+    }
+}
+
+/// Other platforms stack child webviews differently; nothing to do.
+#[cfg(not(windows))]
+fn raise_above_tabs(_wv: &tauri::Webview) {}
 
 /// Hide the popup by parking it offscreen at minimum size. Replaces
 /// the previous close-the-webview behavior so subsequent RMBs reuse
@@ -378,6 +527,48 @@ pub fn close_context_menu(app: tauri::AppHandle) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn menu_opens_at_the_cursor_when_it_fits() {
+        assert_eq!(place_on_axis(100.0, 240.0, 1000.0), 100.0);
+    }
+
+    #[test]
+    fn menu_flips_to_end_at_the_cursor_near_the_far_edge() {
+        // 460 + 411 runs past a 758 tall window, so it opens upward.
+        assert_eq!(place_on_axis(460.0, 411.0, 758.0), 49.0);
+    }
+
+    #[test]
+    fn menu_is_clamped_inside_when_neither_side_fits() {
+        let y = place_on_axis(200.0, 500.0, 600.0);
+        assert_eq!(y, 600.0 - 500.0 - POPUP_MARGIN);
+        assert!(place_on_axis(1.0, 900.0, 600.0) >= POPUP_MARGIN);
+    }
+
+    #[test]
+    fn pending_click_is_taken_once_while_fresh() {
+        let at = Instant::now();
+        let mut slot = Some((7, at));
+        assert_eq!(
+            take_if_fresh(&mut slot, at + Duration::from_secs(1), PENDING_TTL),
+            Some(7)
+        );
+        assert!(slot.is_none());
+        assert_eq!(
+            take_if_fresh(&mut slot, at + Duration::from_secs(1), PENDING_TTL),
+            None
+        );
+    }
+
+    #[test]
+    fn stale_pending_click_is_dropped() {
+        let at = Instant::now();
+        let mut slot = Some((7, at));
+        let late = at + PENDING_TTL + Duration::from_millis(1);
+        assert_eq!(take_if_fresh(&mut slot, late, PENDING_TTL), None);
+        assert!(slot.is_none(), "a stale click still empties the slot");
+    }
 
     #[test]
     fn token_matches_accepts_identical_tokens() {

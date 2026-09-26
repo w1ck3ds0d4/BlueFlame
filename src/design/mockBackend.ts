@@ -203,6 +203,8 @@ export function installDesignMocks(scenario: Scenario, mobile = false) {
       case 'open_menu_popup':
       case 'show_context_menu':
       case 'hide_context_menu':
+      case 'take_pending_context_menu':
+      case 'open_bookmark_menu':
       case 'open_trust_panel':
       case 'close_trust_panel':
         return null;

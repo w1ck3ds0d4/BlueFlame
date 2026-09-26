@@ -100,8 +100,9 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
 
     // Dispatch a tab event to Rust. Windows first: window.chrome.webview
     // is WebView2's own postMessage bridge, delivered to a dedicated
-    // WebMessageReceived handler on the Rust side (tab_channel.rs) that
-    // Tauri's own IPC bridge does not intercept or interfere with. That
+    // WebMessageReceived handler on the Rust side (tab_channel.rs). The
+    // frame MUST be a string: wry's handler runs first and fails on any
+    // non-string message, which stops WebView2 from calling ours. That
     // channel works from remote pages, where Tauri IPC does not: Tauri 2
     // refuses invoke() calls from a remote origin unless the webview's
     // capability grants a "remote" URL block, which tab-webviews.json
@@ -115,7 +116,7 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
         try {
             var webview2 = window.chrome && window.chrome.webview;
             if (webview2 && typeof webview2.postMessage === "function") {
-                webview2.postMessage({ bf: "tab-event", token: BF_TOKEN, event: event });
+                webview2.postMessage(JSON.stringify({ bf: "tab-event", token: BF_TOKEN, event: event }));
                 return;
             }
         } catch (_) { /* fall through to the Tauri IPC bridge below */ }
@@ -1474,9 +1475,9 @@ pub async fn open_menu_popup(
     if let Some(wv) = app.get_webview(MENU_POPUP_LABEL) {
         let _ = wv.close();
     }
-    if let Some(wv) = app.get_webview(crate::context_menu::CONTEXT_MENU_LABEL) {
-        let _ = wv.close();
-    }
+    // Park, never close: the context menu popup is created once and
+    // reused, so closing it here killed right-click for the session.
+    let _ = crate::context_menu::hide_context_menu(app.clone());
     if existing_same_kind {
         return Ok(());
     }
@@ -1575,9 +1576,9 @@ pub fn close_all_popups(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(wv) = app.get_webview(MENU_POPUP_LABEL) {
         let _ = wv.close();
     }
-    if let Some(wv) = app.get_webview(crate::context_menu::CONTEXT_MENU_LABEL) {
-        let _ = wv.close();
-    }
+    // Park, never close: the context menu popup is created once and
+    // reused, so closing it here killed right-click for the session.
+    let _ = crate::context_menu::hide_context_menu(app.clone());
     Ok(())
 }
 
@@ -1986,6 +1987,16 @@ fn looks_like_search_query(input: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tab_events_are_posted_as_strings() {
+        // wry's WebMessageReceived handler fails on non-string messages,
+        // and WebView2 then skips ours (tab_channel.rs), so an object
+        // frame means right-click silently never reaches Rust.
+        let script = CONTEXT_MENU_INIT_SCRIPT_TEMPLATE;
+        assert!(script.contains("webview2.postMessage(JSON.stringify({ bf: \"tab-event\""));
+        assert_eq!(script.matches("webview2.postMessage(").count(), 1);
+    }
 
     #[test]
     fn full_url_passes_through() {
