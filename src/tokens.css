@@ -18,6 +18,7 @@
   --wk-surface-3: #0f131a;
   --wk-line: #242b39;
   --wk-line-2: #2e3647;
+  --wk-line-3: #5a6a8b;
   --wk-ink: #e9ebf2;
   --wk-muted: #9098a8;
   --wk-faint: #7f879a;
@@ -33,7 +34,7 @@
   --surface-sunken: var(--wk-surface-3);
   --surface-field: var(--wk-surface);
   --border-default: var(--wk-line);
-  --border-strong: var(--wk-line-2);
+  --border-strong: var(--wk-line-3);
   --border-accent: #7c5cf099;
   --text-heading: var(--wk-ink);
   --text-body: var(--wk-ink);
@@ -78,6 +79,7 @@
   --wk-surface-3: #e7e1d2;
   --wk-line: #cfc7b4;
   --wk-line-2: #b3a992;
+  --wk-line-3: #8b7e61;
   --wk-ink: #17150f;
   --wk-muted: #4a453a;
   --wk-faint: #6e6857;
@@ -92,7 +94,7 @@
   --surface-sunken: #e7e1d2;
   --surface-field: #f7f4ec;
   --border-default: #cfc7b4;
-  --border-strong: #b3a992;
+  --border-strong: var(--wk-line-3);
   --text-heading: #17150f;
   --text-body: #17150f;
   --text-secondary: #413c31;
@@ -132,6 +134,7 @@
   --wk-surface-3: #e9edf5;
   --wk-line: #dce1ec;
   --wk-line-2: #c7cedd;
+  --wk-line-3: #7687ac;
   --wk-ink: #1b2030;
   --wk-muted: #5c6577;
   --wk-faint: #626b7a;
@@ -144,7 +147,7 @@
   --surface-sunken: var(--wk-surface-3);
   --surface-field: var(--wk-surface);
   --border-default: var(--wk-line);
-  --border-strong: var(--wk-line-2);
+  --border-strong: var(--wk-line-3);
   --text-heading: var(--wk-ink);
   --text-body: var(--wk-ink);
   --text-secondary: var(--wk-muted);
