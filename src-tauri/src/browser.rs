@@ -943,7 +943,7 @@ pub fn browser_switch_tab(
     // window size, which waits for the UI thread; the UI thread can be
     // waiting for this same lock (any sync tab command), so measuring
     // under the lock froze the app when this ran off the UI thread
-    // (session restore at boot, the Ctrl+1..9 relay).
+    // (session restore at boot, rebuilding the tabs after the mobile toggle).
     let (active_pos, active_size) = active_tab_bounds(&app);
     let mut s = tabs.lock().map_err(|e| format!("lock tabs: {e}"))?;
     if !s.tabs.iter().any(|t| t.id == id) {
