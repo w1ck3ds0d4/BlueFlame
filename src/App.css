@@ -1197,18 +1197,25 @@ button {
   -webkit-mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
 }
 
-/* 24x24 CSS px minimum target size (WCAG 2.2 2.5.8), not the 14x14 the
-   old nested span used; align-self centers it in the taller .tab-wrap
-   row without changing that row's own height. */
+/* The visible glyph stays 14x14, the same box the old nested span used,
+   so .tab-wrap does not stretch past the tab strip's original ~22px
+   content height (src-tauri/src/browser.rs's CHROME_HEIGHT positions
+   the native per-tab WebView2 under this row and was measured against
+   that height in the tab-chrome PR, docs/design-audit.md item 5). The
+   24x24 CSS px minimum target size (WCAG 2.2 2.5.8) comes instead from
+   the ::before pseudo-element below, an invisible hit-area extension
+   that is part of this button's own box (so it still fires this
+   button's click, never the tab's) without adding to layout height. */
 .tab-close {
+  position: relative;
   flex: none;
   align-self: center;
   margin-right: var(--space-2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 14px;
+  height: 14px;
   background: transparent;
   border: none;
   color: var(--text-muted);
@@ -1216,6 +1223,12 @@ button {
   line-height: 1;
   border-radius: 0;
   cursor: pointer;
+}
+
+.tab-close::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
 }
 
 .tab-close:hover {
