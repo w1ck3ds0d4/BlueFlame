@@ -14,8 +14,9 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
+#[cfg(not(target_os = "windows"))]
+use hudsucker::certificate_authority::RcgenAuthority;
 use hudsucker::{
-    certificate_authority::RcgenAuthority,
     hyper::{Request, Response, StatusCode},
     Body, HttpContext, HttpHandler, Proxy, RequestOrResponse,
 };
@@ -760,6 +761,21 @@ pub async fn start(
     // installed at startup in `lib.rs::run` so every rustls user in the
     // binary agrees on the same crypto backend.
     let issuer = ca.into_issuer().context("building CA issuer for proxy")?;
+
+    // On Windows the root key lives in CNG (TPM-backed when possible) and
+    // can't hand out its private bytes, so `hudsucker::RcgenAuthority`
+    // (which reuses the root's own key pair as every leaf's TLS key)
+    // doesn't work here. `TpmAuthority` mints a fresh, ordinary leaf key
+    // pair per host instead, and only asks CNG to sign that leaf's
+    // certificate - once per newly seen host, cached after that. See
+    // `ca_tpm.rs` / `ca_tpm/authority.rs`.
+    #[cfg(target_os = "windows")]
+    let authority = crate::ca_tpm::TpmAuthority::new(
+        issuer,
+        1_000,
+        hudsucker::rustls::crypto::ring::default_provider(),
+    );
+    #[cfg(not(target_os = "windows"))]
     let authority = RcgenAuthority::new(
         issuer,
         1_000,

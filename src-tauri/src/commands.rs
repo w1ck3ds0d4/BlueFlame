@@ -497,15 +497,24 @@ pub struct CaTrustStatus {
     pub trusted: bool,
     /// Whether BlueFlame can attempt an auto-install on this platform.
     pub auto_install_supported: bool,
+    /// Where the private key lives: "tpm" (Windows, TPM-backed CNG key),
+    /// "software" (Windows, non-exportable software CNG key, no TPM found),
+    /// or "file" (every other platform - a plaintext key file on disk).
+    pub key_backend: String,
 }
 
 #[tauri::command]
 pub async fn get_ca_trust_status(app: tauri::AppHandle) -> Result<CaTrustStatus, String> {
     let cert = resolve_cert_path(&app)?;
+    let ca_dir = cert
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| cert.clone());
     Ok(CaTrustStatus {
         cert_path: cert.to_string_lossy().to_string(),
         trusted: crate::ca_trust::is_trusted(&cert),
         auto_install_supported: cfg!(target_os = "windows"),
+        key_backend: crate::ca::key_backend(&ca_dir),
     })
 }
 

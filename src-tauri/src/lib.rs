@@ -2,6 +2,8 @@ mod body_analysis;
 mod brand;
 mod browser;
 mod ca;
+#[cfg(target_os = "windows")]
+mod ca_tpm;
 mod ca_trust;
 mod commands;
 mod context_menu;
