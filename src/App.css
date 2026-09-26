@@ -469,8 +469,8 @@ button {
 }
 
 .url-trust {
-  /* Icon-only: the score itself now lives in the trust panel this
-     button opens, and in its aria-label/title, not in visible text. */
+  /* "100" needs horizontal breathing room or the last digit clips. */
+  min-width: 42px;
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;

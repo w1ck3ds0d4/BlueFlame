@@ -475,6 +475,7 @@ export function UrlBar({
           aria-expanded={trustOpen}
         >
           <TrustIcon aria-hidden size={13} strokeWidth={1.75} />
+          <span>{trust ? trust.score : '--'}</span>
         </button>
       </div>
 
