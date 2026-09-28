@@ -15,7 +15,7 @@ release.
 BlueFlame replaces Opera GX as Daniel's daily browser, and Claude can drive it the way it drives
 Chrome. The core browser and the Claude channel are built in parallel.
 
-- [ ] **CA private key in the TPM**: `ca.rs` writes the root key as a plain PEM file, so anything
+- [x] **CA private key in the TPM** (#106): `ca.rs` writes the root key as a plain PEM file, so anything
       running as Daniel can copy it and later intercept all his TLS. Create the key inside the TPM
       (Microsoft Platform Crypto Provider, non-exportable), sign leaf certificates through it with a
       per-host cache, migrate an existing install (new root trusted, old root removed, old key file
