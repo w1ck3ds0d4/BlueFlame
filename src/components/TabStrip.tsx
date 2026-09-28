@@ -77,6 +77,27 @@ export function TabStrip({
   const visibleIds = new Set(visibleTabs.map((t) => t.id));
   const hiddenTabs = tabs.filter((t) => !visibleIds.has(t.id));
 
+  // The close button that had focus unmounts the moment its tab closes.
+  // Without this, focus silently drops to <body> and a keyboard user has
+  // to re-Tab from the top of the page to get back into the strip. Move
+  // focus to the next visible tab's select button, else the previous
+  // one, else the new-tab button, else the strip itself. Visible
+  // neighbours survive the close (closing a tab never hides another
+  // tab), but the overflow toggle is skipped on purpose: closing
+  // a tab can empty the overflow list, which unmounts the toggle and
+  // would drop focus to <body> after all.
+  function focusAfterClose(closedWrap: HTMLElement | null) {
+    if (!closedWrap) return;
+    const tabButton = (el: Element | null) =>
+      el?.classList.contains('tab-wrap') ? el.querySelector<HTMLElement>('.tab') : null;
+    const target =
+      tabButton(closedWrap.nextElementSibling) ??
+      tabButton(closedWrap.previousElementSibling) ??
+      stripRef.current?.querySelector<HTMLElement>('.tab-new') ??
+      stripRef.current;
+    target?.focus();
+  }
+
   // The overflow list is a child-webview popup (open_menu_popup), not a
   // DOM dropdown: it can extend down over the page area below the
   // chrome, and a DOM element there would render underneath the active
@@ -84,21 +105,6 @@ export function TabStrip({
   // comes back as a `blueflame:select-tab` / `blueflame:close-tab`
   // event, which App.tsx turns into the same onSelect/onClose calls a
   // click in the strip itself would have made.
-  // The close button that had focus unmounts the moment its tab closes.
-  // Without this, focus silently drops to <body> and a keyboard user has
-  // to re-Tab from the top of the page to get back into the strip. Move
-  // focus to the next tab's select button, falling back to the previous
-  // tab, then to whatever follows the last tab (overflow toggle or the
-  // new-tab button), then to the strip itself.
-  function focusAfterClose(closedWrap: HTMLElement | null) {
-    if (!closedWrap) return;
-    const next = closedWrap.nextElementSibling as HTMLElement | null;
-    const prev = closedWrap.previousElementSibling as HTMLElement | null;
-    const nextTarget = next?.classList.contains('tab-wrap') ? next.querySelector<HTMLElement>('.tab') : next;
-    const prevTarget = prev?.classList.contains('tab-wrap') ? prev.querySelector<HTMLElement>('.tab') : prev;
-    (nextTarget ?? prevTarget ?? stripRef.current)?.focus();
-  }
-
   function openOverflowMenu(btn: HTMLButtonElement) {
     const rect = btn.getBoundingClientRect();
     const items = hiddenTabs.map((t) => ({ id: t.id, url: t.url, title: t.title || t.url }));
