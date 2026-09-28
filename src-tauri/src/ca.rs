@@ -622,6 +622,75 @@ mod windows_tests {
     }
 
     #[test]
+    fn install_fails_twice_then_retry_succeeds() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        let legacy_pem = write_legacy_fixture(dir);
+
+        let store = fake_store();
+        let trust = trust_with_legacy_seeded(&legacy_pem);
+        trust.set_fail_install(true);
+
+        let first = load_or_create_with(
+            dir,
+            Arc::clone(&store),
+            "blueflame-test-ca-retry-install-twice",
+            &trust,
+        )
+        .expect("load_or_create_with should not fail just because auto-trust failed");
+
+        // Second attempt: still failing, as if the same transient condition
+        // (or a second crash right after the same step) recurred.
+        let second = load_or_create_with(
+            dir,
+            Arc::clone(&store),
+            "blueflame-test-ca-retry-install-twice",
+            &trust,
+        )
+        .expect("load_or_create_with should not fail just because auto-trust failed again");
+
+        assert_eq!(
+            first.cert_pem, second.cert_pem,
+            "a second failed attempt should not mint yet another cert"
+        );
+        assert!(
+            dir.join(windows_paths::LEGACY_KEY_FILE).exists(),
+            "legacy key file must survive two failed installs so migration keeps retrying"
+        );
+        let legacy_thumb =
+            crate::ca_trust::cert_thumbprint_sha1(&legacy_pem).expect("legacy thumbprint");
+        assert!(
+            trust.is_trusted(&legacy_thumb),
+            "only the untouched legacy root should be trusted while install keeps failing"
+        );
+        assert_eq!(trust.trusted.lock().unwrap().len(), 1);
+        assert!(
+            trust.removed.lock().unwrap().is_empty(),
+            "the old root must never be removed while the new one has never been confirmed \
+             trusted"
+        );
+
+        // Third attempt: install finally succeeds.
+        trust.set_fail_install(false);
+        let third =
+            load_or_create_with(dir, store, "blueflame-test-ca-retry-install-twice", &trust)
+                .expect("retry should succeed");
+
+        assert_eq!(
+            first.cert_pem, third.cert_pem,
+            "retry should reuse the already-generated cert, not mint another one"
+        );
+        assert!(!dir.join(windows_paths::LEGACY_KEY_FILE).exists());
+        assert!(!dir.join(windows_paths::LEGACY_THUMBPRINT_FILE).exists());
+        assert_eq!(
+            trust.removed.lock().unwrap().len(),
+            1,
+            "the old root should be removed exactly once, on the attempt that finally succeeds"
+        );
+        assert_only_new_root_trusted(&trust, &third.cert_pem);
+    }
+
+    #[test]
     fn install_succeeds_but_removing_old_root_fails_then_retry() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let dir = tmp.path();
