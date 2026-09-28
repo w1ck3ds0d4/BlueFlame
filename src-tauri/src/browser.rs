@@ -100,8 +100,9 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
 
     // Dispatch a tab event to Rust. Windows first: window.chrome.webview
     // is WebView2's own postMessage bridge, delivered to a dedicated
-    // WebMessageReceived handler on the Rust side (tab_channel.rs) that
-    // Tauri's own IPC bridge does not intercept or interfere with. That
+    // WebMessageReceived handler on the Rust side (tab_channel.rs). The
+    // frame MUST be a string: wry's handler runs first and fails on any
+    // non-string message, which stops WebView2 from calling ours. That
     // channel works from remote pages, where Tauri IPC does not: Tauri 2
     // refuses invoke() calls from a remote origin unless the webview's
     // capability grants a "remote" URL block, which tab-webviews.json
@@ -115,7 +116,7 @@ const CONTEXT_MENU_INIT_SCRIPT_TEMPLATE: &str = r#"
         try {
             var webview2 = window.chrome && window.chrome.webview;
             if (webview2 && typeof webview2.postMessage === "function") {
-                webview2.postMessage({ bf: "tab-event", token: BF_TOKEN, event: event });
+                webview2.postMessage(JSON.stringify({ bf: "tab-event", token: BF_TOKEN, event: event }));
                 return;
             }
         } catch (_) { /* fall through to the Tauri IPC bridge below */ }
@@ -939,6 +940,12 @@ pub fn browser_switch_tab(
     tabs: tauri::State<'_, Tabs>,
     id: u64,
 ) -> Result<TabsView, String> {
+    // Measure BEFORE taking the tabs lock. `active_tab_bounds` reads the
+    // window size, which waits for the UI thread; the UI thread can be
+    // waiting for this same lock (any sync tab command), so measuring
+    // under the lock froze the app when this ran off the UI thread
+    // (session restore at boot, rebuilding the tabs after the mobile toggle).
+    let (active_pos, active_size) = active_tab_bounds(&app);
     let mut s = tabs.lock().map_err(|e| format!("lock tabs: {e}"))?;
     if !s.tabs.iter().any(|t| t.id == id) {
         return Err(format!("unknown tab id {id}"));
@@ -947,7 +954,6 @@ pub fn browser_switch_tab(
     // New active tab gets the mobile/desktop-aware bounds; everyone
     // else shrinks to 0x0 so inactive tabs don't paint over the
     // visible one.
-    let (active_pos, active_size) = active_tab_bounds(&app);
     for t in &s.tabs {
         if let Some(wv) = app.get_webview(&tab_label(t.id)) {
             if t.id == id {
@@ -1051,6 +1057,8 @@ pub fn browser_close_tab(
         let _ = wv.close();
     }
 
+    // Measured before locking, see `browser_switch_tab`.
+    let (pos, size) = active_tab_bounds(&app);
     let mut s = tabs.lock().map_err(|e| format!("lock tabs: {e}"))?;
     s.tabs.retain(|t| t.id != id);
 
@@ -1061,7 +1069,6 @@ pub fn browser_close_tab(
         s.active_id = s.tabs.last().map(|t| t.id);
         if let Some(new_active) = s.active_id {
             if let Some(wv) = app.get_webview(&tab_label(new_active)) {
-                let (pos, size) = active_tab_bounds(&app);
                 let _ = wv.set_position(pos);
                 let _ = wv.set_size(size);
             }
@@ -1251,10 +1258,11 @@ pub fn browser_show_active(
     app: tauri::AppHandle,
     tabs: tauri::State<'_, Tabs>,
 ) -> Result<TabsView, String> {
+    // Measured before locking, see `browser_switch_tab`.
+    let (pos, size) = active_tab_bounds(&app);
     let s = tabs.lock().map_err(|e| format!("lock tabs: {e}"))?;
     if let Some(id) = s.active_id {
         if let Some(wv) = app.get_webview(&tab_label(id)) {
-            let (pos, size) = active_tab_bounds(&app);
             let _ = wv.set_position(pos);
             let _ = wv.set_size(size);
         }
@@ -1467,9 +1475,9 @@ pub async fn open_menu_popup(
     if let Some(wv) = app.get_webview(MENU_POPUP_LABEL) {
         let _ = wv.close();
     }
-    if let Some(wv) = app.get_webview(crate::context_menu::CONTEXT_MENU_LABEL) {
-        let _ = wv.close();
-    }
+    // Park, never close: the context menu popup is created once and
+    // reused, so closing it here killed right-click for the session.
+    let _ = crate::context_menu::hide_context_menu(app.clone());
     if existing_same_kind {
         return Ok(());
     }
@@ -1568,9 +1576,9 @@ pub fn close_all_popups(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(wv) = app.get_webview(MENU_POPUP_LABEL) {
         let _ = wv.close();
     }
-    if let Some(wv) = app.get_webview(crate::context_menu::CONTEXT_MENU_LABEL) {
-        let _ = wv.close();
-    }
+    // Park, never close: the context menu popup is created once and
+    // reused, so closing it here killed right-click for the session.
+    let _ = crate::context_menu::hide_context_menu(app.clone());
     Ok(())
 }
 
@@ -1979,6 +1987,16 @@ fn looks_like_search_query(input: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tab_events_are_posted_as_strings() {
+        // wry's WebMessageReceived handler fails on non-string messages,
+        // and WebView2 then skips ours (tab_channel.rs), so an object
+        // frame means right-click silently never reaches Rust.
+        let script = CONTEXT_MENU_INIT_SCRIPT_TEMPLATE;
+        assert!(script.contains("webview2.postMessage(JSON.stringify({ bf: \"tab-event\""));
+        assert_eq!(script.matches("webview2.postMessage(").count(), 1);
+    }
 
     #[test]
     fn full_url_passes_through() {

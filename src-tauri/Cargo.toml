@@ -132,6 +132,7 @@ windows = { version = "0.61", features = [
   "Win32_Security",
   "Win32_Security_Authorization",
   "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging",
 ] }
 
 # macOS 14+ WKWebView gets its per-webview proxy via Tauri's

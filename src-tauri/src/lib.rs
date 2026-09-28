@@ -54,8 +54,8 @@ use commands::{
     set_search_engine, set_tor_settings, url_suggest,
 };
 use context_menu::{
-    close_context_menu, hide_context_menu, show_context_menu, submit_tab_event,
-    SharedContextMenuTx, SharedContextToken,
+    close_context_menu, hide_context_menu, open_bookmark_menu, show_context_menu, submit_tab_event,
+    take_pending_context_menu, SharedContextMenuTx, SharedContextToken,
 };
 use control::commands::{control_recent_log, control_respond_approval};
 use downloads::{
@@ -195,10 +195,9 @@ pub fn run() {
                             let (offset, _) = browser::active_tab_bounds(&consumer_handle);
                             payload.screen_x += offset.x;
                             payload.screen_y += offset.y;
-                            if let Err(e) = context_menu::deliver_context_menu_payload(
-                                &consumer_handle,
-                                payload,
-                            ) {
+                            if let Err(e) =
+                                context_menu::open_context_menu(&consumer_handle, payload).await
+                            {
                                 tracing::warn!(error = %e, "deliver context menu payload failed");
                             }
                         }
@@ -332,6 +331,8 @@ pub fn run() {
             close_context_menu,
             hide_context_menu,
             show_context_menu,
+            take_pending_context_menu,
+            open_bookmark_menu,
             submit_tab_event,
             export_data,
             import_data,

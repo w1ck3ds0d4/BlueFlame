@@ -1,13 +1,12 @@
 import type { ComponentType } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Bookmark,
-  BookmarkCheck,
   ShieldAlert,
   ShieldBan,
   ShieldCheck,
   ShieldQuestion,
   ShieldX,
+  Star,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import type { TrustAssessment, TrustLabel } from './TrustPopup';
@@ -331,40 +330,41 @@ export function UrlBar({
   const trustLabel = trust ? trust.label : 'idle';
   const trustTone = TRUST_TONE[trustLabel];
   const TrustIcon = TRUST_ICON[trustLabel];
-  const BookmarkIcon = bookmarked ? BookmarkCheck : Bookmark;
 
   return (
     <div className="url-bar-row" role="toolbar" aria-label="Browser chrome">
-      <button
-        className="nav-icon"
-        onClick={goBack}
-        disabled={!browsing}
-        title="back"
-        aria-label="back"
-      >
-        ←
-      </button>
-      <button
-        className="nav-icon"
-        onClick={goForward}
-        disabled={!browsing}
-        title="forward"
-        aria-label="forward"
-      >
-        →
-      </button>
-      <button
-        className="nav-icon"
-        onClick={reload}
-        disabled={!browsing}
-        title="reload"
-        aria-label="reload"
-      >
-        ⟳
-      </button>
-      <button className="nav-icon" onClick={home} title="home" aria-label="home">
-        ~
-      </button>
+      <div className="nav-cluster-left" role="group" aria-label="navigation">
+        <button
+          className="nav-icon"
+          onClick={goBack}
+          disabled={!browsing}
+          title="back"
+          aria-label="back"
+        >
+          ←
+        </button>
+        <button
+          className="nav-icon"
+          onClick={goForward}
+          disabled={!browsing}
+          title="forward"
+          aria-label="forward"
+        >
+          →
+        </button>
+        <button
+          className="nav-icon"
+          onClick={reload}
+          disabled={!browsing}
+          title="reload"
+          aria-label="reload"
+        >
+          ⟳
+        </button>
+        <button className="nav-icon" onClick={home} title="home" aria-label="home">
+          ~
+        </button>
+      </div>
 
       <div className="url-input-wrap" ref={containerRef}>
         <input
@@ -398,6 +398,16 @@ export function UrlBar({
             <span className="ascii-cursor blinking">_</span>
           </span>
         )}
+        <button
+          className={`url-star url-star-in-field ${bookmarked ? 'status-tone-active' : ''}`}
+          onClick={toggleBookmark}
+          disabled={!bookmarkable}
+          title={bookmarked ? 'remove bookmark' : 'add bookmark'}
+          aria-label={bookmarked ? 'remove bookmark' : 'add bookmark'}
+          aria-pressed={bookmarked}
+        >
+          <Star aria-hidden size={14} strokeWidth={1.75} fill={bookmarked ? 'currentColor' : 'none'} />
+        </button>
         {open && suggestions.length > 0 && (
           <ul
             id="url-suggest-list"
@@ -429,7 +439,7 @@ export function UrlBar({
         )}
       </div>
 
-      <div className="status-group" role="group" aria-label="site status">
+      <div className="nav-cluster-right" role="group" aria-label="site status">
         <span
           className={`block-counter ${blocksForHost > 0 ? 'block-counter-on' : 'block-counter-off'}`}
           title={
@@ -467,22 +477,7 @@ export function UrlBar({
           <TrustIcon aria-hidden size={13} strokeWidth={1.75} />
           <span>{trust ? trust.score : '--'}</span>
         </button>
-
-        <button
-          className={`url-star ${bookmarked ? 'status-tone-active' : ''}`}
-          onClick={toggleBookmark}
-          disabled={!bookmarkable}
-          title={bookmarked ? 'remove bookmark' : 'add bookmark'}
-          aria-label={bookmarked ? 'remove bookmark' : 'add bookmark'}
-          aria-pressed={bookmarked}
-        >
-          <BookmarkIcon aria-hidden size={13} strokeWidth={1.75} />
-        </button>
       </div>
-
-      <button className="nav-primary" onClick={submit}>
-        go
-      </button>
 
       {error && (
         <div className="url-error" role="alert">

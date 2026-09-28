@@ -15,8 +15,8 @@
 //! reaches Rust: right-click looks like it does nothing (see #11).
 //!
 //! The fix is a second, narrower channel that only exists on Windows:
-//! the injected script posts the same event as a JSON object via
-//! `window.chrome.webview.postMessage(...)`, tagged with a marker field
+//! the injected script posts the same event as a JSON string via
+//! `window.chrome.webview.postMessage(JSON.stringify(...))`, tagged with a marker field
 //! and the same per-launch token `submit_tab_event` already checks.
 //! `attach_to_webview` below registers an additional
 //! `ICoreWebView2::add_WebMessageReceived` handler on the tab's own
@@ -25,6 +25,12 @@
 //! ones into the exact same `ContextMenuRequest` channel `submit_tab_event`
 //! uses, via `context_menu::tab_event_to_request` /
 //! `context_menu::route_tab_event`.
+//!
+//! It must be a string, not an object. wry registers its handler first
+//! and reads every message with `TryGetWebMessageAsString(...)?`; for an
+//! object that call fails, wry's handler returns the error, and WebView2
+//! then skips every handler registered after it, ours included. Posting
+//! objects is why right-click never reached Rust after #112.
 //!
 //! `add_WebMessageReceived` is additive, not exclusive: WebView2 fires
 //! every registered handler for a `postMessage` call, and Tauri's own
@@ -37,7 +43,8 @@
 //! check in [`parse_tab_event_message`] and is silently ignored here,
 //! and our own tagged messages have no shape Tauri's IPC parser expects,
 //! so its handler discards them the same way it already discards any
-//! other page traffic it doesn't recognize.
+//! other page traffic it doesn't recognize (it prints only the parse
+//! error, "missing field `cmd`", to the page console, never the body).
 //!
 //! `submit_tab_event` (Tauri IPC) remains wired up as the fallback for
 //! non-Windows platforms, unchanged.
@@ -173,7 +180,7 @@ mod windows_impl {
         Ok(())
     }
 
-    /// Pull the JSON text out of the event args and hand it to the
+    /// Pull the posted string out of the event args and hand it to the
     /// shared, platform-independent parser. Anything that isn't one of
     /// ours (wrong marker, bad token, malformed, oversized) is dropped
     /// silently - that includes Tauri's own IPC traffic, which arrives
@@ -183,14 +190,20 @@ mod windows_impl {
         tx_state: &SharedContextMenuTx,
         token: &str,
     ) {
+        // Our script posts a JSON string. `WebMessageAsJson` would hand
+        // back that string JSON-encoded a second time (a quoted literal),
+        // which the parser rightly rejects, so read it as a string.
         let mut message = windows::core::PWSTR(std::ptr::null_mut());
-        if unsafe { args.WebMessageAsJson(&mut message) }.is_err() {
+        if unsafe { args.TryGetWebMessageAsString(&mut message) }.is_err() {
             return;
         }
         let raw = take_pwstr(message);
         let event = match super::parse_tab_event_message(&raw, token) {
             Ok(event) => event,
-            Err(_reason) => return,
+            Err(reason) => {
+                tracing::debug!(?reason, "tab channel message dropped");
+                return;
+            }
         };
         if let Ok(request) = crate::context_menu::tab_event_to_request(event) {
             crate::context_menu::route_tab_event(tx_state, request);

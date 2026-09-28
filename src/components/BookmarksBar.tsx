@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { Bookmark as BookmarkIcon, ChevronRight, Folder } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -53,6 +54,19 @@ export function BookmarksBar({ version, onOpened }: Props) {
   // `blueflame:navigate-to` event, which App.tsx turns into the same
   // browser_navigate_active + refresh this component's own `open`
   // above does.
+  // Right-click on a chip opens the shared context-menu popup (a child
+  // webview, so it draws over the page) with bookmark actions. main.tsx
+  // already swallows the native menu everywhere in the chrome.
+  function openChipMenu(e: ReactMouseEvent, b: Bookmark) {
+    e.preventDefault();
+    invoke('open_bookmark_menu', {
+      url: b.url,
+      title: labelFor(b),
+      x: e.clientX,
+      y: e.clientY,
+    }).catch(() => undefined);
+  }
+
   function openFolderMenu(g: FolderGroup, btn: HTMLButtonElement) {
     const rect = btn.getBoundingClientRect();
     const items = g.items.map(({ bookmark, subpath }) => ({
@@ -79,6 +93,7 @@ export function BookmarksBar({ version, onOpened }: Props) {
               key={b.url}
               className="bookmark-chip"
               onClick={() => open(b.url)}
+              onContextMenu={(e) => openChipMenu(e, b)}
               title={b.url}
             >
               <BookmarkIcon className="bookmark-chip-icon" aria-hidden size={13} strokeWidth={1.75} />

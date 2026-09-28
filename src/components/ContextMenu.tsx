@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { emit, listen } from '@tauri-apps/api/event';
 import {
   ArrowLeft,
   ArrowRight,
@@ -13,6 +13,7 @@ import {
   Search,
   Shield,
   Star,
+  StarOff,
   Wrench,
 } from 'lucide-react';
 
@@ -27,6 +28,8 @@ interface Payload {
   selection_text: string | null;
   screen_x: number;
   screen_y: number;
+  /** Opened from a bookmark chip in the chrome, not from a page. */
+  bookmark: boolean;
 }
 
 /**
@@ -56,6 +59,14 @@ export function ContextMenu() {
       setError(null);
       setPayload(e.payload);
     });
+    // If Rust had to recreate this popup for a click, that click was
+    // emitted before we were listening. Pull it once we are.
+    unlistenPromise
+      .then(() => invoke<Payload | null>('take_pending_context_menu'))
+      .then((pending) => {
+        if (pending) setPayload(pending);
+      })
+      .catch(() => undefined);
     return () => {
       unlistenPromise.then((unlisten) => unlisten()).catch(() => undefined);
     };
@@ -124,6 +135,29 @@ export function ContextMenu() {
         url: payload.page_url,
         title: '',
       });
+      await emit('blueflame:bookmarks-changed');
+    } catch (e) {
+      setError(String(e));
+    }
+    await dismiss();
+  }
+
+  // Same route the bookmark-folder popup uses: App.tsx navigates the
+  // active tab and brings the browser view forward if a panel is open.
+  async function openHere(url: string) {
+    try {
+      await emit('blueflame:navigate-to', url);
+    } catch (e) {
+      setError(String(e));
+    }
+    await dismiss();
+  }
+
+  async function removeBookmark(url: string) {
+    try {
+      const still = await invoke<boolean>('bookmark_is', { url });
+      if (still) await invoke('bookmark_toggle', { url, title: '' });
+      await emit('blueflame:bookmarks-changed');
     } catch (e) {
       setError(String(e));
     }
@@ -159,6 +193,21 @@ export function ContextMenu() {
     // First render before any event arrives. The webview is parked
     // offscreen so the user never sees this.
     return <div className="menu-popup context-menu" ref={rootRef} />;
+  }
+
+  if (payload.bookmark && payload.link_url) {
+    const url = payload.link_url;
+    return (
+      <div className="menu-popup context-menu" role="menu" ref={rootRef}>
+        <Item Icon={ArrowRight} label="open" onClick={() => openHere(url)} />
+        <Item Icon={ExternalLink} label="open in new tab" onClick={() => openTab(url, false)} />
+        <Item Icon={Shield} label="open in private tab" onClick={() => openTab(url, true)} />
+        <Divider />
+        <Item Icon={LinkIcon} label="copy link" onClick={() => copy(url)} />
+        <Divider />
+        <Item Icon={StarOff} label="remove bookmark" onClick={() => removeBookmark(url)} />
+      </div>
+    );
   }
 
   const hasLink = !!payload.link_url;
