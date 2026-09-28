@@ -77,6 +77,27 @@ export function TabStrip({
   const visibleIds = new Set(visibleTabs.map((t) => t.id));
   const hiddenTabs = tabs.filter((t) => !visibleIds.has(t.id));
 
+  // The close button that had focus unmounts the moment its tab closes.
+  // Without this, focus silently drops to <body> and a keyboard user has
+  // to re-Tab from the top of the page to get back into the strip. Move
+  // focus to the next visible tab's select button, else the previous
+  // one, else the new-tab button, else the strip itself. Visible
+  // neighbours survive the close (closing a tab never hides another
+  // tab), but the overflow toggle is skipped on purpose: closing
+  // a tab can empty the overflow list, which unmounts the toggle and
+  // would drop focus to <body> after all.
+  function focusAfterClose(closedWrap: HTMLElement | null) {
+    if (!closedWrap) return;
+    const tabButton = (el: Element | null) =>
+      el?.classList.contains('tab-wrap') ? el.querySelector<HTMLElement>('.tab') : null;
+    const target =
+      tabButton(closedWrap.nextElementSibling) ??
+      tabButton(closedWrap.previousElementSibling) ??
+      stripRef.current?.querySelector<HTMLElement>('.tab-new') ??
+      stripRef.current;
+    target?.focus();
+  }
+
   // The overflow list is a child-webview popup (open_menu_popup), not a
   // DOM dropdown: it can extend down over the page area below the
   // chrome, and a DOM element there would render underneath the active
@@ -135,52 +156,63 @@ export function TabStrip({
   }, []);
 
   return (
-    <div className="tab-strip" role="tablist" aria-label="Tabs" ref={stripRef}>
+    <div className="tab-strip" role="tablist" aria-label="Tabs" ref={stripRef} tabIndex={-1}>
       {visibleTabs.map((t) => {
         const host = hostOf(t.url);
         const fav = host ? favicons[host] : undefined;
         const claudeDriven = claudeTabIds?.includes(t.id) ?? false;
         return (
-          <button
+          // Two sibling buttons, not a button nested inside a button: a
+          // <button> cannot nest inside another <button> (invalid HTML,
+          // and a nested non-button close target could not take keyboard
+          // focus of its own), so a keyboard user could select a tab here
+          // but never close one. Same structure as MenuPopup.tsx's
+          // "tab-overflow" kind.
+          <div
             key={t.id}
-            role="tab"
-            aria-selected={t.id === activeId}
-            className={`tab ${t.id === activeId ? 'tab-active' : ''} ${
+            className={`tab-wrap ${t.id === activeId ? 'tab-active' : ''} ${
               t.private ? 'tab-private' : ''
             } ${claudeDriven ? 'tab-claude' : ''}`}
-            onClick={() => onSelect(t.id)}
-            title={claudeDriven ? `[Claude is driving this tab] ${t.url}` : t.private ? `private tab: ${t.url}` : t.url}
           >
-            <span className="tab-favicon" aria-hidden>
-              {t.loading ? (
-                <span className="tab-spinner">{spinner}</span>
-              ) : fav ? (
-                <img src={fav} alt="" className="tab-favicon-img" />
-              ) : (
-                <span className="tab-spinner tab-spinner-dim">·</span>
-              )}
-            </span>
-            {t.private && (
-              <VenetianMask className="tab-private-icon" aria-hidden size={12} strokeWidth={1.75} />
-            )}
-            {claudeDriven && (
-              <span className="tab-claude-badge" aria-label="Claude is driving this tab">
-                C
+            <button
+              role="tab"
+              aria-selected={t.id === activeId}
+              className="tab"
+              onClick={() => onSelect(t.id)}
+              title={claudeDriven ? `[Claude is driving this tab] ${t.url}` : t.private ? `private tab: ${t.url}` : t.url}
+            >
+              <span className="tab-favicon" aria-hidden>
+                {t.loading ? (
+                  <span className="tab-spinner">{spinner}</span>
+                ) : fav ? (
+                  <img src={fav} alt="" className="tab-favicon-img" />
+                ) : (
+                  <span className="tab-spinner tab-spinner-dim">·</span>
+                )}
               </span>
-            )}
-            <span className="tab-title">{t.title || t.url}</span>
-            <span
+              {t.private && (
+                <VenetianMask className="tab-private-icon" aria-hidden size={12} strokeWidth={1.75} />
+              )}
+              {claudeDriven && (
+                <span className="tab-claude-badge" aria-label="Claude is driving this tab">
+                  C
+                </span>
+              )}
+              <span className="tab-title">{t.title || t.url}</span>
+            </button>
+            <button
+              type="button"
               className="tab-close"
-              role="button"
               aria-label={`Close ${t.title}`}
               onClick={(e) => {
                 e.stopPropagation();
+                focusAfterClose(e.currentTarget.closest<HTMLElement>('.tab-wrap'));
                 onClose(t.id);
               }}
             >
-              ×
-            </span>
-          </button>
+              <span aria-hidden>&times;</span>
+            </button>
+          </div>
         );
       })}
       {hiddenTabs.length > 0 && (
