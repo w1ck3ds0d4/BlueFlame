@@ -13,7 +13,7 @@ Privacy-first browser shell. On desktop, an embedded MITM filter proxy strips tr
 - **Built-in blocklist** - covers the worst offenders out of the box (doubleclick, GA, GTM, hotjar, mixpanel, segment, amplitude, fb pixels)
 - **Filter list support** - EasyPrivacy + EasyList subscribed by default, easylist-compatible rules compiled into SQLite, live-reload without restart
 - **Body analysis + reputation** - request/response analysis hooks plus a URL reputation pass for fingerprinting + tracking heuristics
-- **Embedded Tor (via arti)** - SOCKS connector wired through to the proxy so any tab can route over Tor without an external client
+- **Embedded Tor (via arti)** - SOCKS connector wired through to the proxy so any tab can route over Tor without an external client. A default-on `built-in-tor` Cargo feature that can be compiled out.
 - **Private tabs** - sessions isolated from the main store
 
 ### Browser shell
@@ -163,7 +163,7 @@ That test proves the pipe, its ACL, the token handshake, and the bridge's real M
 
 ```
 BlueFlame/
-  src/                                  React + Vite frontend
+  src/                                  Preact + Vite frontend (React-compatible via preact/compat)
     main.tsx                            Entry
     App.tsx                             Shell, tab strip, chrome
     App.css                             Dark theme styles
@@ -222,8 +222,9 @@ BlueFlame/
     tools.mjs                           Tool definitions shared with the tests
   .github/
     workflows/ci.yml                    Build + test
+    workflows/security.yml              Secret + dependency scan
     dependabot.yml
-  .vscode/                              Launch + tasks + recommended extensions
+  .vscode/                              Launch config (launch.json)
   package.json                          Frontend deps + Tauri CLI scripts
   vite.config.ts                        Vite dev server + build config
   LICENSE                               AGPL v3
