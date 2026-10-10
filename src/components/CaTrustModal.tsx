@@ -6,6 +6,7 @@ interface CaTrustStatus {
   cert_path: string;
   trusted: boolean;
   auto_install_supported: boolean;
+  key_backend: string;
 }
 
 interface Props {
@@ -78,12 +79,31 @@ export function CaTrustModal({ browsing, onDismissed }: Props) {
           your OS needs to recognize the BlueFlame root CA.
         </p>
 
-        <div className="callout callout-warn">
-          <strong>Installing a root CA is a serious action.</strong> Anyone with the CA private
-          key could impersonate HTTPS sites on this machine. BlueFlame keeps the key locally
-          in <code className="mono">{status.cert_path.replace(/\.crt$/, '.key')}</code>. Uninstall
-          the CA if you stop using BlueFlame.
-        </div>
+        {status.key_backend === 'tpm' && (
+          <div className="callout callout-warn">
+            <strong>Installing a root CA is a serious action.</strong> The private key is
+            generated inside this machine's TPM and never leaves it or touches disk - copying
+            this computer's files does not hand over a working CA. Software already running as
+            you could still ask the TPM to sign new certificates for as long as it runs.
+            Uninstall the CA if you stop using BlueFlame.
+          </div>
+        )}
+        {status.key_backend === 'software' && (
+          <div className="callout callout-warn">
+            <strong>Installing a root CA is a serious action.</strong> No TPM was found on this
+            machine, so the private key is held in Windows' software key store instead - still
+            non-exportable and never written to a plain file, but without hardware backing.
+            Uninstall the CA if you stop using BlueFlame.
+          </div>
+        )}
+        {status.key_backend !== 'tpm' && status.key_backend !== 'software' && (
+          <div className="callout callout-warn">
+            <strong>Installing a root CA is a serious action.</strong> Anyone with the CA private
+            key could impersonate HTTPS sites on this machine. BlueFlame keeps the key locally
+            in <code className="mono">{status.cert_path.replace(/\.crt$/, '.key')}</code>. Uninstall
+            the CA if you stop using BlueFlame.
+          </div>
+        )}
 
         <p>
           Cert file:

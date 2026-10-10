@@ -25,9 +25,14 @@ In scope:
 
 Out of scope:
 
-- A user with local code execution on the device. The CA private key sits on
-  disk in the app data dir; anyone with read access to that file can sign
-  arbitrary leaves.
+- Malware or another process already running as the same Windows user while
+  BlueFlame's CA key exists. On Windows the key lives inside CNG (see
+  "Root CA caveat" below) and cannot be copied out, but anything running as
+  you can still ask CNG to sign a leaf certificate through the same access
+  BlueFlame itself uses, for as long as that key exists.
+- A user with local code execution on macOS or Linux. Those platforms still
+  keep the CA private key in a plaintext file in the app data dir; anyone
+  with read access to that file can sign arbitrary leaves.
 - State-level network adversaries. Embedded Tor and external SOCKS5 Tor are
   available, but BlueFlame is not a hardened anonymity browser (it is not
   Tor Browser).
@@ -44,10 +49,21 @@ Out of scope:
 - The custom `ServerCertVerifier` in `src-tauri/src/tls_verifier.rs` captures
   cert metadata for the trust panel without short-circuiting webpki. We never
   fabricate a successful verification.
-- The MITM root CA is generated once on first run via `rcgen` and persisted
-  to `<app_data>/ca/blueflame-ca.crt` + `blueflame-ca.key`. Across restarts,
-  the existing key is reloaded so the user does not have to re-trust on every
-  launch.
+- The MITM root CA cert is generated once on first run via `rcgen` and
+  persisted to `<app_data>/ca/blueflame-ca.crt`. On Windows the private key
+  is generated inside CNG (`src-tauri/src/ca_tpm.rs`) - the TPM via the
+  Microsoft Platform Crypto Provider when one exists, otherwise the
+  non-exportable Microsoft Software Key Storage Provider - and is never
+  written to disk; leaf certificates are signed by asking CNG to sign a
+  hash, through `rcgen`'s external-signer support, with a fresh ordinary
+  key pair minted per host so the TPM/CNG is only asked once per newly seen
+  host (cached after that), not once per request. On macOS/Linux the key is
+  still persisted to `blueflame-ca.key` next to the cert. Across restarts,
+  the existing key is reloaded (or, on Windows, reopened by name in CNG) so
+  the user does not have to re-trust on every launch. An install upgrading
+  from a pre-TPM version migrates automatically: a new CNG-backed root is
+  generated and trusted per-user, the old root is removed from the trust
+  store by thumbprint, and the old key file is overwritten then deleted.
 - Windows CA install runs `certutil -user -addstore Root`, the user-scope
   trust store. No admin elevation, no machine-wide trust.
 - Filter-list and reputation-feed loaders skip bad lines, bad regex, and
@@ -155,9 +171,31 @@ CA private key could impersonate HTTPS sites for that user account. The README
 calls this out explicitly. Mitigations in code today:
 
 - The CA is user-scoped on Windows (no admin / system-wide install).
-- The CA key never leaves the local app data dir.
-- BlueFlame ships with the source for the CA generation logic; users can
-  audit `ca.rs` to confirm there is no upload path.
+- On Windows, the key is generated inside CNG (`ca_tpm.rs`) and never exists
+  as a file: the Microsoft Platform Crypto Provider asks the TPM to generate
+  and hold it, non-exportable, and every signature is produced by asking the
+  TPM to sign a hash. If no TPM is present, the Microsoft Software Key
+  Storage Provider is used instead with the same non-exportable policy -
+  still no key file, just no hardware binding, and BlueFlame logs and
+  surfaces this in the CA trust modal so it's not silent. **This does not
+  protect against malware already running as the same Windows user**: it
+  can still ask CNG to sign arbitrary leaf certificates for as long as the
+  key exists, exactly as BlueFlame itself does. What it removes is the
+  ability to copy the key out to use later, offline, or on another machine -
+  a disk image, a backup, or a file-exfiltrating infostealer no longer hands
+  over a working CA.
+- On macOS and Linux the key still lives in a plaintext file in the app data
+  dir; BlueFlame ships the source for the CA generation logic so users can
+  audit `ca.rs` / `ca_tpm.rs` to confirm there is no upload path.
+- Upgrading from a pre-TPM Windows install migrates automatically on first
+  run of the new version: the new CNG-backed root is trusted per-user
+  through the same one-click, no-admin flow, the old root is removed from
+  the trust store by thumbprint (never by common name, so it can't take out
+  an unrelated cert), and the old key file is overwritten with zeros before
+  being deleted. That overwrite is best-effort - it does not guarantee the
+  old key is unrecoverable from wear-levelled SSD flash - but it is
+  strictly better than a plain delete, and no path on disk holds the key in
+  the clear once migration finishes.
 
 If a user stops using BlueFlame, they should remove the CA from the OS trust
 store and delete `<app_data>/ca/`.
