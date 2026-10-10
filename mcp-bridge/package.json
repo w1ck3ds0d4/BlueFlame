@@ -13,6 +13,6 @@
     "test": "node --test test/pipe-client.test.mjs test/tools.test.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.4"
+    "@modelcontextprotocol/sdk": "^1.31.0"
   }
 }
