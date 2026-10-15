@@ -4,6 +4,36 @@ All notable changes to BlueFlame are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Claude control channel, phase 1**: a token-gated named-pipe control
+  server with a per-origin approval prompt and an action log, driven by
+  the MCP bridge (#107).
+- Downloads stream to disk instead of buffering in memory (#105).
+- Design preview mode for the browser chrome (#113).
+- Bookmark star in the address bar, with a symmetrical toolbar (#119).
+- Password locker design doc, `docs/password-locker.md` (#104).
+
+### Changed
+
+- Visual upgrade onto the WickIT design system with the flame accent
+  (#114), then a polish pass on tabs, status chips, the rail and private
+  tabs (#115).
+- Border contrast raised to 3:1 from the WickIT kit (#120).
+- Standard CI, security scan and monthly Dependabot workflows (#95).
+
+### Fixed
+
+- Keyboard focus for the tab close button (#116).
+- Never read the window size while holding the tabs lock (#117).
+- The right-click menu works on pages and bookmarks (#118).
+- Tab right-click and events over a private WebView2 channel (#112).
+- The bootstrapped TorClient is returned without double-wrapping in
+  `Arc` (#69).
+- The `chunks_exact_to_as_chunks` clippy lint (#95).
+
 ## [0.2.0] - 2026-05-18
 
 First minor release. Significant feature work and a major dependency
