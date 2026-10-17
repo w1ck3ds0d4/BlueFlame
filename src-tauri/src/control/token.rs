@@ -18,7 +18,7 @@ impl SessionToken {
     /// Generate a fresh random token from the OS CSPRNG.
     pub fn generate() -> Self {
         let mut buf = [0u8; TOKEN_BYTES];
-        getrandom::getrandom(&mut buf).expect("OS RNG unavailable");
+        getrandom::fill(&mut buf).expect("OS RNG unavailable");
         Self(to_hex(&buf))
     }
 
