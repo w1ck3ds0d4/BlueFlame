@@ -47,7 +47,7 @@ Privacy-first browser shell. On desktop, an embedded MITM filter proxy strips tr
 
 ### Prerequisites
 
-- [Rust stable toolchain](https://rustup.rs/) (1.90+)
+- [Rust stable toolchain](https://rustup.rs/) (1.95.0, pinned by `rust-toolchain.toml`)
 - [Node.js](https://nodejs.org/) 20+
 - [pnpm](https://pnpm.io/installation)
 - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS (WebView2 on Windows, `libwebkit2gtk-4.1` on Linux, Xcode tools on macOS)
@@ -178,6 +178,7 @@ BlueFlame/
       Downloads.tsx                     Download list view
       ContextMenu.tsx, MenuPopup.tsx    Right-click + dropdown menus
       FindBar.tsx                       Ctrl+F find-in-page
+      ApprovalBar.tsx                   Allow/Deny prompt for Claude control channel origins
       Dashboard.tsx, BlockLog.tsx,      Privacy dashboard + per-request log
         Metrics.tsx                     Resource monitor sparklines
       CaTrustModal.tsx, TrustPopup.tsx  CA install prompts
@@ -196,6 +197,7 @@ BlueFlame/
       body_analysis.rs, reputation.rs   Request/response heuristics + URL reputation pass
       browser.rs, session.rs, new_tab.rs Tab session management + new-tab page
       context_menu.rs                   Right-click action backend
+      tab_channel.rs                    Windows tab-event channel (WebView2 web messages)
       downloads.rs                      Content-Disposition attachment handler
       embedded_tor.rs, socks_connector.rs Arti-backed Tor SOCKS proxy
       favicons.rs                       Favicon fetch + cache

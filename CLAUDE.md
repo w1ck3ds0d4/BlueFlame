@@ -9,7 +9,7 @@ Public, AGPL-3.0-or-later, commercial license offered (see COMMERCIAL.md).
 ```bash
 pnpm install
 pnpm dev             # vite dev server (frontend only)
-pnpm build           # tsc && vite build
+pnpm build           # tsc && tokens-drift check && vite build, then postbuild no-design-in-build check
 pnpm preview         # vite preview
 pnpm tauri dev       # full desktop app
 ```
@@ -32,7 +32,7 @@ see ROADMAP.md.
 | Path                                 | What it is                                                                                                                                                                                                                                                                                        |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/`                               | Preact/TS frontend: `App.tsx`, `components/` (chrome, dashboard, settings, overlays)                                                                                                                                                                                                              |
-| `src-tauri/src/`                     | Rust backend: `proxy.rs` (MITM core), `ca.rs`/`ca_trust.rs`/`trust.rs` (root CA + trust scoring), `filter_parser.rs`/`list_loader.rs` (filter engine), `reputation.rs` (URLHaus feed), `storage.rs` (SQLite), `embedded_tor.rs`/`socks_connector.rs` (Tor), `commands.rs` (Tauri command surface) |
+| `src-tauri/src/`                     | Rust backend: `proxy.rs` (MITM core), `ca.rs`/`ca_trust.rs`/`trust.rs` (root CA + trust scoring), `filter_parser.rs`/`list_loader.rs` (filter engine), `reputation.rs` (URLHaus feed), `storage.rs` (SQLite), `embedded_tor.rs`/`socks_connector.rs` (Tor), `commands.rs` (Tauri command surface), `tab_channel.rs` (Windows tab-event channel), `control/` (Claude control channel) |
 | `ARCHITECTURE.md`, `HOW_IT_WORKS.md` | Component breakdown and plain-words walkthrough                                                                                                                                                                                                                                                   |
 | `ROADMAP.md`                         | Path to v1.0.0                                                                                                                                                                                                                                                                                    |
 

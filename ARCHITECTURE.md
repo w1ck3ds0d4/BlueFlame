@@ -11,13 +11,13 @@ proxy can apply filters, gather signals, and proxy traffic upstream.
 ## Tech stack
 
 - Backend: Rust (edition 2021), Tauri 2, Tokio
-- MITM proxy: `hudsucker` 0.22, `hyper` 1, `hyper-rustls` 0.27, `rustls` 0.23
-- Cert authority: `rcgen` 0.13 (self-signed root + per-host leaves)
-- Storage: `rusqlite` 0.37 (bundled SQLite)
+- MITM proxy: `hudsucker` 0.24, `hyper` 1, `hyper-rustls` 0.27, `rustls` 0.23
+- Cert authority: `rcgen` 0.14 (self-signed root + per-host leaves)
+- Storage: `rusqlite` 0.38 (bundled SQLite)
 - Filters: `regex` 1 + `RegexSet`, custom easylist parser, parallel matching with `rayon`
-- Tor: `arti-client` 0.41 (embedded, default feature) and SOCKS5 connector via `tokio-socks`
+- Tor: `arti-client` 0.44 (embedded, default feature) and SOCKS5 connector via `tokio-socks`
 - HTTP fetcher: `reqwest` 0.12 (rustls-tls)
-- HTML / body analysis: `scraper` 0.26, `x509-parser` 0.18
+- HTML / body analysis: `scraper` 0.27, `x509-parser` 0.18
 - Frontend: Preact 10 (via `@preact/preset-vite`), TypeScript, Vite 8, `lucide-react` icons
 - Build: pnpm workspace, `tauri-cli` 2
 
@@ -45,6 +45,10 @@ Rust backend (`src-tauri/src/`):
   password-on-HTTP, outdated JS libs; per-host signal accumulator.
 - `browser.rs`, `session.rs`, `new_tab.rs`: per-tab webview lifecycle, popup overlays
   (trust panel, menu, context menu), session save/restore via `<app_data>/session.json`.
+- `tab_channel.rs`: Windows-only private channel for tab events (right-click, middle-click,
+  key relay) over WebView2's own `WebMessageReceived`, so remote pages never get Tauri IPC.
+- `control/`: Claude control channel (named pipe, per-session token, per-origin approval
+  gate, action log, tool dispatch). Windows-only; other platforms get a stub.
 - `context_menu.rs`: pre-warmed offscreen popup webview + IPC token so right-clicks
   show in roughly 0 ms after first launch.
 - `downloads.rs`: Content-Disposition attachment handler, list view backend.
@@ -65,7 +69,8 @@ Frontend (`src/`):
   `Sidebar.tsx`: browser chrome.
 - `Bookmarks.tsx`, `BookmarksBar.tsx`, `Downloads.tsx`, `Settings.tsx`,
   `Dashboard.tsx`, `BlockLog.tsx`, `Metrics.tsx`, `Debug.tsx`, `FindBar.tsx`,
-  `MobileChrome.tsx`, `PersonalIndex.tsx`: feature views.
+  `MobileChrome.tsx`, `PersonalIndex.tsx`: feature views. `ApprovalBar.tsx` shows the
+  per-origin Allow/Deny prompt for the Claude control channel.
 - `ContextMenu.tsx`, `MenuPopup.tsx`, `CaTrustModal.tsx`, `TrustPopup.tsx`: overlays
   loaded into separate webviews so they can float above tab content.
 - `useWebviewOverlay.ts`, `ascii.ts`: helpers for overlay layout and ASCII sparklines.
