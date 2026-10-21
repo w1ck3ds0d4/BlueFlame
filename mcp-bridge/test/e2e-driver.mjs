@@ -7,7 +7,7 @@
 // as a JSON array on argv[2], and prints the results as JSON on stdout.
 //
 // Not part of the published bridge: only used from that Rust test, never
-// by Claude Code or by Daniel.
+// by Claude Code or by the maintainer.
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";

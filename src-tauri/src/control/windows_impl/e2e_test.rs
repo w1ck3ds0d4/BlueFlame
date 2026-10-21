@@ -19,9 +19,9 @@
 //! `ToolDispatcher`, so this test can stand in a lightweight double
 //! instead). Booting the *real* production app (real window, real proxy,
 //! real app-data-derived CA/profile) from an unattended test would also
-//! risk colliding with Daniel's own daily-driver BlueFlame instance - same
+//! risk colliding with the maintainer's own daily-driver BlueFlame instance - same
 //! fixed pipe name, same proxy port, same profile - which is exactly what
-//! the "never touch Daniel's real profile/CA" test rule guards against.
+//! the "never touch the maintainer's real profile/CA" test rule guards against.
 //!
 //! So: `FakeDispatcher` below reuses the real `ClaudeTabs` (tab scoping)
 //! and the real `PageActions` trait (`RecordingFakePage` standing in only
@@ -31,7 +31,7 @@
 //! token handshake, which is what PR #107's review comment was about.
 //! `open_tab`/`navigate`/`list_tabs` and the approval-gate flow stay on
 //! `ToolDispatcher`'s existing unit tests; a live WebView2 tab and a live
-//! `claude` CLI session are Daniel's own manual smoke test per the README.
+//! `claude` CLI session are the maintainer's own manual smoke test per the README.
 
 use std::process::Stdio;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -228,7 +228,7 @@ async fn connect_retrying(pipe_name: &str) -> tokio::net::windows::named_pipe::N
 #[ignore = "spawns a real named pipe server + the real Node mcp-bridge; run explicitly on the Windows laptop with mcp-bridge's deps installed (pnpm install at the repo root)"]
 #[tokio::test]
 async fn real_pipe_end_to_end_through_the_bridge() {
-    // A real, disposable app-data root - never Daniel's real
+    // A real, disposable app-data root - never the maintainer's real
     // `%APPDATA%\com.w1ck3ds0d4.blueflame`. Deleted (via tempdir's Drop) at
     // the end of the test.
     let app_data = tempfile::tempdir().expect("tempdir");

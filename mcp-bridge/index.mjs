@@ -21,7 +21,7 @@ async function main() {
   });
 
   // BLUEFLAME_PIPE_NAME lets a test point the bridge at a disposable pipe
-  // instead of the one real BlueFlame instance uses. Daniel never sets
+  // instead of the one real BlueFlame instance uses. The maintainer never sets
   // this himself; leaving it unset keeps the real, fixed pipe name.
   const pipeName = process.env.BLUEFLAME_PIPE_NAME || PIPE_NAME;
   const client = new ControlPipeClient({ token, pipeName });

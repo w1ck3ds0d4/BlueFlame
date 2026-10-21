@@ -10,7 +10,7 @@ interface ApprovalRequest {
 
 /**
  * Banner for the Claude control channel's per-origin approval gate: the
- * dispatcher blocks a tool call on a new site until Daniel answers here.
+ * dispatcher blocks a tool call on a new site until the maintainer answers here.
  * Requests queue if more than one arrives; only the oldest is shown.
  */
 export function ApprovalBar() {

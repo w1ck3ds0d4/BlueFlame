@@ -17,7 +17,7 @@ use super::protocol::{ElementTarget, PageActions};
 use super::tabs::ClaudeTabs;
 use crate::browser;
 
-/// How long a new-site prompt waits for Daniel before the tool call fails.
+/// How long a new-site prompt waits for the maintainer before the tool call fails.
 /// Long enough that stepping away for a minute doesn't lose the request,
 /// short enough that a forgotten prompt doesn't hang Claude forever.
 const APPROVAL_TIMEOUT: Duration = Duration::from_secs(120);
@@ -70,7 +70,7 @@ impl ToolDispatcher {
         }
     }
 
-    /// Called from the `control_respond_approval` Tauri command once Daniel
+    /// Called from the `control_respond_approval` Tauri command once the maintainer
     /// clicks Allow or Deny on the in-app prompt.
     pub fn respond_approval(&self, request_id: u64, allow: bool) -> bool {
         let sender = self
@@ -89,7 +89,7 @@ impl ToolDispatcher {
     }
 
     /// Drop any tracked Claude tab id that no longer has an open tab (closed
-    /// by Daniel or by Claude itself). Called on every `blueflame:tabs-changed`
+    /// by the maintainer or by Claude itself). Called on every `blueflame:tabs-changed`
     /// event so `ClaudeTabs` never grows stale entries a future `list_tabs`
     /// could return or a guessed id could collide with.
     pub fn reconcile_open_tabs(&self) {
@@ -234,7 +234,7 @@ impl ToolDispatcher {
 
     /// Confirms `tab_id` names a tab Claude itself opened, and returns it.
     /// Every content-touching tool (read/click/type/...) calls this first so
-    /// a stray id can never reach one of Daniel's own tabs.
+    /// a stray id can never reach one of the maintainer's own tabs.
     async fn require_claude_tab(&self, args: &Value) -> Result<u64, String> {
         let tab_id = args
             .get("tab_id")
@@ -263,7 +263,7 @@ impl ToolDispatcher {
     }
 
     /// Blocks (asynchronously) until `origin` has a remembered decision,
-    /// asking Daniel via the in-app prompt the first time it's seen.
+    /// asking the maintainer via the in-app prompt the first time it's seen.
     async fn ensure_origin_approved(
         &self,
         tab_id: Option<u64>,
