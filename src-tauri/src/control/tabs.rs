@@ -4,7 +4,7 @@
 //! see `control::dispatch::open_tab`). `list_tabs` only returns members of
 //! this set, and every other tool call is rejected for a tab id that is not
 //! in it, so a `navigate`/`click`/`type` call can never reach one of
-//! Daniel's own tabs even if it guessed a valid id.
+//! the maintainer's own tabs even if it guessed a valid id.
 
 use std::collections::HashSet;
 use std::sync::Mutex;

@@ -8,7 +8,7 @@ use tauri::State;
 use super::log::ActionLogEntry;
 use super::SharedDispatcher;
 
-/// Daniel's answer to the "Claude wants to visit `<origin>`" prompt.
+/// the maintainer's answer to the "Claude wants to visit `<origin>`" prompt.
 #[tauri::command]
 pub fn control_respond_approval(
     dispatcher: State<'_, SharedDispatcher>,

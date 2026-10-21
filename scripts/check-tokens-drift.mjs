@@ -5,7 +5,7 @@
 // that was not also made in the kit fails the build instead of quietly
 // drifting the two apart.
 //
-// CI has no access to Daniel's local WickIT-HQ clone, so this cannot
+// CI has no access to the maintainer's local WickIT-HQ clone, so this cannot
 // diff against the kit directly; it only catches a local edit to this
 // file. To pull in a real update from the kit: copy the kit's
 // tokens.css over src/tokens.css again, then run this script with

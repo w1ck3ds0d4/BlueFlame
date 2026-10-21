@@ -4,7 +4,7 @@
 //! Never a TCP or remote-debugging port - see `SECURITY.md`. A local
 //! process still has to (a) know the pipe name, which is fixed and public,
 //! and (b) read the token file, which is locked to this Windows account, so
-//! only something already running as Daniel can talk to it.
+//! only something already running as the maintainer can talk to it.
 
 use std::ffi::c_void;
 use std::sync::Arc;
@@ -27,7 +27,7 @@ const MAX_LINE_BYTES: usize = 4 * 1024 * 1024;
 
 /// Accept connections forever, one `NamedPipeServer` instance per client.
 /// Each connection gets its own task so a slow or hung caller (there should
-/// only ever be one - the local MCP bridge - but nothing stops Daniel from
+/// only ever be one - the local MCP bridge - but nothing stops the maintainer from
 /// running two) can't block the others.
 ///
 /// `pipe_name` is a parameter (rather than always reading the `PIPE_NAME`

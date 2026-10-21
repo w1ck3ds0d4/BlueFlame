@@ -48,7 +48,7 @@ pub async fn start(app: &AppHandle) -> anyhow::Result<SharedDispatcher> {
     });
 
     // Keep `ClaudeTabs` in sync with reality: a tab Claude opened can be
-    // closed by Daniel from the regular tab strip at any time.
+    // closed by the maintainer from the regular tab strip at any time.
     let reconcile_dispatcher = dispatcher.clone();
     app.listen("blueflame:tabs-changed", move |_event| {
         reconcile_dispatcher.reconcile_open_tabs();

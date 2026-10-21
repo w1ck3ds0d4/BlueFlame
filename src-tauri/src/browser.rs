@@ -675,7 +675,7 @@ pub async fn browser_open_tab(
 /// Open `url` in a fresh private tab, the same InPrivate profile
 /// `browser_new_private_tab` uses. This is what the Claude control channel
 /// calls for its `open_tab` tool: every tab Claude drives starts with none
-/// of Daniel's cookies, storage or logins, whatever URL it's pointed at.
+/// of the maintainer's cookies, storage or logins, whatever URL it's pointed at.
 ///
 /// The control channel's only caller (`windows_impl::pipe`) is Windows-only,
 /// so this has no caller at all on other platforms in phase 1 - see

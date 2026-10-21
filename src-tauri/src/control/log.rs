@@ -1,7 +1,7 @@
 //! Action log for the Claude control channel.
 //!
 //! Every tool call the pipe dispatches is appended here: an in-memory ring
-//! buffer for the Debug panel, and a JSON-lines file on disk Daniel can open
+//! buffer for the Debug panel, and a JSON-lines file on disk the maintainer can open
 //! directly (`<app_data>/control/action-log.jsonl`) if he wants the full
 //! history rather than just the last 200 entries.
 

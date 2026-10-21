@@ -12,7 +12,7 @@ export const TOOLS = [
   {
     name: "open_tab",
     description:
-      "Open a new BlueFlame tab for Claude to drive. Always InPrivate, with none of Daniel's logins.",
+      "Open a new BlueFlame tab for Claude to drive. Always InPrivate, with none of the maintainer's logins.",
     inputSchema: {
       type: "object",
       properties: { url: { type: "string", description: "URL to open, default about:blank" } },

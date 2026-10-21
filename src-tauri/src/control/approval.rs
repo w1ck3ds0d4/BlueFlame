@@ -1,7 +1,7 @@
 //! Per-origin approval gate.
 //!
 //! The first tool call that touches a given origin (scheme + host + port)
-//! blocks until Daniel answers an in-app prompt. His answer is remembered
+//! blocks until the maintainer answers an in-app prompt. His answer is remembered
 //! for the rest of the session (and persisted across restarts) so he is
 //! not asked twice for the same site.
 
@@ -61,7 +61,7 @@ impl ApprovalGate {
         self.state.lock().ok()?.get(origin).copied()
     }
 
-    /// Record Daniel's answer for `origin` and persist it. A poisoned lock
+    /// Record the maintainer's answer for `origin` and persist it. A poisoned lock
     /// or an unwritable disk both fail soft: the in-memory decision still
     /// takes effect for the rest of this session.
     pub fn remember(&self, origin: &str, decision: Decision) {
