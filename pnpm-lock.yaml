@@ -20,7 +20,7 @@ importers:
     devDependencies:
       '@preact/preset-vite':
         specifier: ^2.10.6
-        version: 2.10.6(@babel/core@7.29.0)(preact@10.29.8)(rollup@4.60.1)(vite@8.1.5(esbuild@0.27.7))
+        version: 2.10.6(@babel/core@7.29.0)(preact@10.29.8)(rollup@4.60.1)(vite@8.1.6(esbuild@0.27.7))
       '@tauri-apps/cli':
         specifier: ^2
         version: 2.11.5
@@ -34,8 +34,8 @@ importers:
         specifier: ~6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.1.5
-        version: 8.1.5(esbuild@0.27.7)
+        specifier: ^8.1.6
+        version: 8.1.6(esbuild@0.27.7)
 
   mcp-bridge:
     dependencies:
@@ -1329,8 +1329,8 @@ packages:
     peerDependencies:
       vite: 5.x || 6.x || 7.x || 8.x
 
-  vite@8.1.5:
-    resolution: {integrity: sha512-7ULLwsCdYx/nRyrpiEwvqb5TFHrMVZyBt+rg/OAXT7rgj/z+DtTDyKFeLAdDkubDVDKD8jOsndmy7m55XcfUsw==}
+  vite@8.1.6:
+    resolution: {integrity: sha512-aRAHIxx5SW5zc1sMqFwJU/t5qaFfXb5Hj0J7W0VXihu/X99+346tz6080tO1T1xVIJORX/b3zVTXGFqUXh35uw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -1673,19 +1673,19 @@ snapshots:
 
   '@oxc-project/types@0.139.0': {}
 
-  '@preact/preset-vite@2.10.6(@babel/core@7.29.0)(preact@10.29.8)(rollup@4.60.1)(vite@8.1.5(esbuild@0.27.7))':
+  '@preact/preset-vite@2.10.6(@babel/core@7.29.0)(preact@10.29.8)(rollup@4.60.1)(vite@8.1.6(esbuild@0.27.7))':
     dependencies:
       '@babel/core': 7.29.0
       '@babel/plugin-transform-react-jsx': 7.28.6(@babel/core@7.29.0)
       '@babel/plugin-transform-react-jsx-development': 7.27.1(@babel/core@7.29.0)
-      '@prefresh/vite': 2.4.12(preact@10.29.8)(vite@8.1.5(esbuild@0.27.7))
+      '@prefresh/vite': 2.4.12(preact@10.29.8)(vite@8.1.6(esbuild@0.27.7))
       '@rollup/pluginutils': 5.3.0(rollup@4.60.1)
       babel-plugin-transform-hook-names: 1.0.2(@babel/core@7.29.0)
       debug: 4.4.3
       magic-string: 0.30.21
       picocolors: 1.1.1
-      vite: 8.1.5(esbuild@0.27.7)
-      vite-prerender-plugin: 0.5.13(vite@8.1.5(esbuild@0.27.7))
+      vite: 8.1.6(esbuild@0.27.7)
+      vite-prerender-plugin: 0.5.13(vite@8.1.6(esbuild@0.27.7))
       zimmerframe: 1.1.4
     transitivePeerDependencies:
       - preact
@@ -1700,7 +1700,7 @@ snapshots:
 
   '@prefresh/utils@1.2.1': {}
 
-  '@prefresh/vite@2.4.12(preact@10.29.8)(vite@8.1.5(esbuild@0.27.7))':
+  '@prefresh/vite@2.4.12(preact@10.29.8)(vite@8.1.6(esbuild@0.27.7))':
     dependencies:
       '@babel/core': 7.29.0
       '@prefresh/babel-plugin': 0.5.3
@@ -1708,7 +1708,7 @@ snapshots:
       '@prefresh/utils': 1.2.1
       '@rollup/pluginutils': 4.2.1
       preact: 10.29.8
-      vite: 8.1.5(esbuild@0.27.7)
+      vite: 8.1.6(esbuild@0.27.7)
     transitivePeerDependencies:
       - supports-color
 
@@ -2556,7 +2556,7 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vite-prerender-plugin@0.5.13(vite@8.1.5(esbuild@0.27.7)):
+  vite-prerender-plugin@0.5.13(vite@8.1.6(esbuild@0.27.7)):
     dependencies:
       kolorist: 1.8.0
       magic-string: 0.30.21
@@ -2564,9 +2564,9 @@ snapshots:
       simple-code-frame: 1.3.0
       source-map: 0.7.6
       stack-trace: 1.0.0-pre2
-      vite: 8.1.5(esbuild@0.27.7)
+      vite: 8.1.6(esbuild@0.27.7)
 
-  vite@8.1.5(esbuild@0.27.7):
+  vite@8.1.6(esbuild@0.27.7):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.5
