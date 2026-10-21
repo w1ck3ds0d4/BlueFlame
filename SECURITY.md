@@ -89,13 +89,13 @@ BlueFlame through a local pipe. What it can and can't do:
   tools trigger run in-process against the tab's own WebView2 instance via
   `ICoreWebView2::CallDevToolsProtocolMethod`, never over a TCP port.
 - Every tab Claude opens is InPrivate (`browser::browser_open_private_tab`):
-  no cookies, storage, saved logins, or history from Daniel's regular
+  no cookies, storage, saved logins, or history from the maintainer's regular
   browsing profile, and none of it is written back either.
 - Claude can only ever act on tabs it opened itself
   (`control::tabs::ClaudeTabs`); a `navigate`/`click`/`type`/... call
   naming any other tab id, including a guessed one, is rejected before it
   reaches the webview.
-- The first tool call against a new origin blocks on Daniel's answer in the
+- The first tool call against a new origin blocks on the maintainer's answer in the
   UI (`control::dispatch::ensure_origin_approved`); a denial or a timeout
   fails the call. The check re-runs on every content-touching tool call
   against the tab's *current* URL, not just at `navigate` time, so an
@@ -105,7 +105,7 @@ BlueFlame through a local pipe. What it can and can't do:
   `document.body.innerText` and the accessibility tree, both scoped to
   visible page content.
 - Every tool call is appended to `<app_data>/control/action-log.jsonl` and
-  kept in a 200-entry ring buffer Daniel can open from the Debug view,
+  kept in a 200-entry ring buffer the maintainer can open from the Debug view,
   whether it succeeded, was denied, or errored.
 
 **Not guaranteed / accepted risk:**
@@ -123,13 +123,13 @@ BlueFlame through a local pipe. What it can and can't do:
   duration of the underlying `wait_for_async_operation` pump. It does not
   crash BlueFlame, and it self-resolves once the tab is closed or the page
   recovers.
-- A local process already running as Daniel that can read his app data
+- A local process already running as the maintainer that can read his app data
   directory can read the token file - this is the same trust boundary as
   every other local secret BlueFlame keeps there (the CA key, the session
   file). The control channel does not attempt to defend against a
   same-user attacker with filesystem access; see the CA private key
   caveat below, which is the pre-existing version of that same boundary.
-- The approval prompt gates by origin, not by exact page: once Daniel
+- The approval prompt gates by origin, not by exact page: once the maintainer
   allows `https://example.com`, every page and every tool call on that
   origin is allowed for the rest of the session (and future sessions,
   since the decision persists to `<app_data>/control/approvals.json`).
@@ -143,10 +143,10 @@ that runs the real named pipe, its real ACL, a real token handshake
 protocol through the official SDK - the transport Claude Code itself uses.
 That test stands in a fake for WebView2 (there is no safe way to also
 exercise a real browser tab from an unattended test without either booting
-Daniel's actual daily-driver BlueFlame instance - same pipe name, proxy
+the maintainer's actual daily-driver BlueFlame instance - same pipe name, proxy
 port, and profile - or duplicating enough of its boot sequence to be
 misleading). A real WebView2 tab, and a real Claude Code session using the
-bridge, are Daniel's own manual smoke test per README.md before this ships.
+bridge, are the maintainer's own manual smoke test per README.md before this ships.
 
 ## Root CA caveat
 

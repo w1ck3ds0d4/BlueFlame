@@ -4,13 +4,13 @@ Method: Nielsen's ten heuristics plus the web design guidelines skill, run again
 `before` screenshots in `docs/screenshots/before/` and the component source in `src/`. Ranked
 most severe first. Each finding says what was done about it in this PR.
 
-Five items below (marked "reported by Daniel") were not found in this pass; he flagged them
+Five items below (marked "reported by the maintainer") were not found in this pass; he flagged them
 directly from screenshots of the running app after the first draft, and they were fixed in the
 same branch before this PR was opened.
 
 ## Top severity
 
-1. **Status chips read as an alarm for normal operation (reported by Daniel).** The block
+1. **Status chips read as an alarm for normal operation (reported by the maintainer).** The block
    counter next to the address bar drew a heavy coloured border and an unclear glyph for
    "trackers blocked on this page", identical in weight to a real warning, and sat as a second
    disconnected box next to the site-scan chip. Blocking is the working state, not a fault
@@ -22,21 +22,21 @@ same branch before this PR was opened.
    real severity colours (`--ok` / `--ok-mid` / `--warn` / `--danger`) since that number is an
    actual finding.
 2. **Tab strip showed a native scrollbar and cramped, abruptly clipped titles (reported by
-   Daniel).** `.tab` had no minimum width and the strip used `overflow-x: auto`, so as tabs piled
+   the maintainer).** `.tab` had no minimum width and the strip used `overflow-x: auto`, so as tabs piled
    up the browser's own scrollbar appeared under the strip (H8 aesthetic and minimalist design;
    H4, since no other part of the chrome shows a raw OS scrollbar). Fixed: tabs share the row's
    width and shrink together down to a 96px floor; past that floor the rest move into an overflow
    menu instead of a scrollbar. The active tab now gets the system's action-colour underline
    (indigo) instead of an ASCII `>` marker in the flame accent, and the title fades at its clipped
    edge (a mask gradient) instead of a hard cut.
-3. **Bookmarks bar rendered items as bracketed text (reported by Daniel).** `.bookmark-chip`
+3. **Bookmarks bar rendered items as bracketed text (reported by the maintainer).** `.bookmark-chip`
    used CSS `::before`/`::after` to print literal `[` and `]` around every label, and the actual
    bookmark icon was `display: none` (H2 match with the real world: real bookmark bars use an
    icon plus a label, never brackets). Fixed: proper chips with a `Bookmark` icon (root bookmarks)
    or a `Folder` icon plus a `ChevronRight` (folders), a bordered hover/focus state, no bracket
    characters anywhere.
 4. **Bookmark-folder and tab-overflow dropdowns render underneath the page (reported by
-   Daniel, root cause verified in code, see PR body for how to check this one).** Both were plain
+   the maintainer, root cause verified in code, see PR body for how to check this one).** Both were plain
    DOM dropdowns positioned with `position: absolute`. Every tab's page is a native child
    WebView2 stacked on top of the chrome's DOM, so wherever a DOM dropdown overlapped that
    area it drew underneath the page instead of over it (H1 visibility of system status: the menu
@@ -45,7 +45,7 @@ same branch before this PR was opened.
    webview above the tab's webview. Escape and losing focus (the equivalent of an outside click
    for a separate webview) both close it now, which the existing hamburger/kebab popups had not
    had either.
-5. **The whole window could scroll, taking the chrome with it (reported by Daniel).** `.shell`
+5. **The whole window could scroll, taking the chrome with it (reported by the maintainer).** `.shell`
    used `min-height: 100vh` and the sidebar used `position: sticky` as a partial workaround, so a
    long panel (settings, downloads) grew the document past the viewport and the titlebar, address
    bar, tab strip and bookmarks bar scrolled away with everything else (H1; the user loses their

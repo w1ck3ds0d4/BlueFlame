@@ -41,7 +41,7 @@ see ROADMAP.md.
 - Commits: `(type) lowercase summary` (feat, fix, chore, docs, refactor, revert, test), no
   trailing period, no body.
 - No em dashes or en dashes anywhere: code, copy, comments, commits, PRs. ASCII hyphens only.
-- Branch + PR per change; Daniel reviews and merges.
+- Branch + PR per change; the maintainer reviews and merges.
 - Never print, log or commit a key, token, password, or the CA private key.
 - No AI attribution trailers in commits or PR text.
 

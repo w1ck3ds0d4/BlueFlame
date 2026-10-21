@@ -32,7 +32,7 @@ Privacy-first browser shell. On desktop, an embedded MITM filter proxy strips tr
 
 - **Local control pipe** - token-gated Windows named pipe, ACL'd to the current user, no remote-debugging port
 - **MCP bridge** - stdio MCP server Claude Code starts directly; tabs, navigate, read page, click, type, key, scroll, screenshot
-- **InPrivate by default** - every tab Claude opens carries none of Daniel's logins, badged in the tab strip
+- **InPrivate by default** - every tab Claude opens carries none of the maintainer's logins, badged in the tab strip
 - **Per-origin approval gate** - the first action on a new site asks in the UI and remembers the answer
 - **Action log** - every tool call recorded, viewable in the Debug panel or as JSON lines on disk
 
@@ -135,7 +135,7 @@ BlueFlame runs a local control server so Claude Code can drive it the way it dri
 
 - On launch, BlueFlame writes a random per-session token to `<app_data>/control/token` and opens a Windows named pipe at `\\.\pipe\blueflame-control`. Both the pipe and the token file carry an ACL restricted to the current Windows user - nothing else on the machine, not even another user account or an administrator process, can read the token or connect to the pipe. The pipe refuses any connection whose first message doesn't carry a byte-for-byte match of that token.
 - A small Node script, `mcp-bridge/`, is a stdio MCP server that Claude Code starts as a subprocess. It reads the token file and speaks newline-delimited JSON to the pipe. It never opens a network port itself.
-- Every tab Claude opens is InPrivate (no cookies, storage or logins from Daniel's regular browsing) and shows a `C` badge in the tab strip. The first tool call against a new origin blocks until you answer an in-app prompt (Allow/Deny); your answer is remembered for the rest of that origin's lifetime. Every call is appended to `<app_data>/control/action-log.jsonl`, and the last 50 show up in the Debug view.
+- Every tab Claude opens is InPrivate (no cookies, storage or logins from the maintainer's regular browsing) and shows a `C` badge in the tab strip. The first tool call against a new origin blocks until you answer an in-app prompt (Allow/Deny); your answer is remembered for the rest of that origin's lifetime. Every call is appended to `<app_data>/control/action-log.jsonl`, and the last 50 show up in the Debug view.
 - Page actions (`get_page_text`, `read_page`, `find`, `click`, `type`, `key`, `scroll`, `screenshot`) run in-process against the tab's own WebView2 instance via `ICoreWebView2::CallDevToolsProtocolMethod` - the same DevTools Protocol Chrome DevTools uses, just called directly rather than over a remote-debugging port. BlueFlame never opens one.
 
 **Adding the bridge to Claude Code** (do this yourself; nothing here edits your Claude config):
