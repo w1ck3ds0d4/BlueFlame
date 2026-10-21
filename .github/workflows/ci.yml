@@ -24,7 +24,7 @@ jobs:
         with:
           version: 9
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: pnpm
@@ -78,7 +78,7 @@ jobs:
       pull-requests: write
     steps:
       - id: meta
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
       - name: Merge when every update in the PR is a patch
         if: steps.meta.outputs.update-type == 'version-update:semver-patch'
         env:
